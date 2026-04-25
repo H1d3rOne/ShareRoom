@@ -1725,6 +1725,7 @@ io.on('connection', (socket) => {
             playing: false,
             currentTime: 0,
             duration: Number(payload.media.duration) || 0,
+            muted: true,
             updatedAt: Date.now(),
             controllerId: socket.id
           }
@@ -1755,7 +1756,9 @@ io.on('connection', (socket) => {
       return
     }
 
-    const canControl = room.sharedMedia.ownerId === socket.id || room.controllerSocketId === socket.id
+    const canControl = isAdminSocket(room, socket.id)
+      || room.sharedMedia.ownerId === socket.id
+      || room.controllerSocketId === socket.id
     if (!canControl) {
       socket.emit('permission-denied', {
         action: 'share-control',
@@ -1779,6 +1782,9 @@ io.on('connection', (socket) => {
         duration: Number.isFinite(Number(payload.duration))
           ? Number(payload.duration)
           : room.sharedMedia.sync?.duration || room.sharedMedia.duration || 0,
+        muted: typeof payload.muted === 'boolean'
+          ? payload.muted
+          : room.sharedMedia.sync?.muted ?? true,
         updatedAt: Date.now(),
         controllerId: socket.id
       }

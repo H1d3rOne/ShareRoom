@@ -713,7 +713,7 @@
                 </div>
                 <div v-if="activeShare.kind === 'video'" class="video-control-panel">
                   <button
-                    class="control-pill"
+                    class="control-pill playback-btn"
                     :disabled="!canLocalControlSharedVideo"
                     @click="toggleSharedVideoPlayback"
                     :title="sharedVideoUi.playing ? '暂停' : '播放'"
@@ -774,10 +774,10 @@
                 </div>
               </div>
               <div class="share-actions">
-                <button v-if="activeShare.kind === 'image' && canControlShare" class="ghost-btn" @click="toggleSharedImageZoom">
+                <button v-if="activeShare.kind === 'image' && canManageSharedMedia" class="ghost-btn" @click="toggleSharedImageZoom">
                   {{ activeShare.zoomed ? '还原' : '放大' }}
                 </button>
-                <button v-if="canShare" class="ghost-btn danger" @click="closeSharedMedia">关闭共享</button>
+                <button v-if="canShare" class="ghost-btn danger close-share-btn" @click="closeSharedMedia">关闭共享</button>
               </div>
             </div>
           </template>
@@ -1102,7 +1102,8 @@ const pendingSharedNegotiations = reactive({})
 const sharedVideoUi = reactive({
   currentTime: 0,
   duration: 0,
-  playing: false
+  playing: false,
+  muted: true
 })
 let sharedVideoUiTicker = null
 
@@ -1151,6 +1152,7 @@ const canOpenGameMenu = computed(() => isConnected.value && isAdmin.value)
 const canGlobalControlShare = computed(() => isConnected.value && isAdmin.value)
 const canLocalControlSharedVideo = computed(() => Boolean(activeShare.value && activeShare.value.kind === 'video' && isConnected.value))
 const canControlShare = computed(() => isConnected.value && (isShareOwner.value || isRemoteController.value))
+const canManageSharedMedia = computed(() => isConnected.value && (canControlShare.value || isAdmin.value))
 const isValidWebpageUrl = computed(() => {
   const url = webpageUrlInput.value.trim()
   if (!url) return false
@@ -1801,8 +1803,18 @@ function shouldMuteSharedVideo(share = activeShare.value) {
 
 function toggleSharedVideoMute() {
   sharedVideoMuted.value = !sharedVideoMuted.value
+  sharedVideoUi.muted = sharedVideoMuted.value
   if (sharedVideoRef.value) {
     sharedVideoRef.value.muted = sharedVideoMuted.value
+  }
+
+  if (canGlobalControlShare.value && activeShare.value?.kind === 'video') {
+    emitShareControl('mute', {
+      muted: sharedVideoMuted.value,
+      playing: sharedVideoUi.playing,
+      currentTime: sharedVideoUi.currentTime,
+      duration: sharedVideoUi.duration
+    })
   }
 }
 
@@ -1864,6 +1876,7 @@ function syncSharedVideoUiFromState(sync = activeShare.value?.sync) {
     sharedVideoUi.currentTime = 0
     sharedVideoUi.duration = 0
     sharedVideoUi.playing = false
+    sharedVideoUi.muted = true
     return
   }
 
@@ -1877,6 +1890,11 @@ function syncSharedVideoUiFromState(sync = activeShare.value?.sync) {
   sharedVideoUi.playing = !canGlobalControlShare.value && sharedVideoLocalPaused.value
     ? false
     : Boolean(sync.playing)
+  sharedVideoUi.muted = Boolean(sync.muted ?? true)
+  sharedVideoMuted.value = sharedVideoUi.muted
+  if (sharedVideoRef.value) {
+    sharedVideoRef.value.muted = sharedVideoMuted.value
+  }
 }
 
 function restartSharedVideoUiTicker() {
@@ -2519,6 +2537,7 @@ function clearActiveShare() {
   lastVideoHeartbeatAt.value = 0
   sharedVideoMuted.value = true
   sharedVideoLocalPaused.value = false
+  sharedVideoUi.muted = true
   webpageLoaded.value = false
   clearIncomingTransfers()
 
@@ -2552,6 +2571,7 @@ function openIncomingShare(media) {
           playing: false,
           currentTime: 0,
           duration: Number(media.duration || 0),
+          muted: true,
           updatedAt: Date.now(),
           controllerId: media.ownerId
         }
@@ -2565,6 +2585,11 @@ function openIncomingShare(media) {
     if (isStreamShare(media)) {
       tryBindSharedIncomingStream(media.ownerId)
     }
+  }
+
+  if (media.kind === 'video') {
+    sharedVideoMuted.value = Boolean(media.sync?.muted ?? true)
+    sharedVideoUi.muted = sharedVideoMuted.value
   }
 }
 
@@ -4586,7 +4611,7 @@ function handleSharedStageKeydown(event) {
 }
 
 function emitShareControl(action, extra = {}) {
-  if (!socket.value?.connected || !activeShare.value || !canControlShare.value) {
+  if (!socket.value?.connected || !activeShare.value || !canManageSharedMedia.value) {
     return
   }
 
@@ -4601,6 +4626,7 @@ function emitShareControl(action, extra = {}) {
     payload.currentTime = extra.currentTime ?? video?.currentTime ?? 0
     payload.playing = extra.playing ?? Boolean(video && !video.paused && !video.ended)
     payload.duration = extra.duration ?? Number(video?.duration || activeShare.value.sync?.duration || 0)
+    payload.muted = extra.muted ?? sharedVideoMuted.value
 
     updateActiveShare({
       controllerId: selfId.value,
@@ -4609,6 +4635,7 @@ function emitShareControl(action, extra = {}) {
         currentTime: payload.currentTime,
         playing: payload.playing,
         duration: payload.duration,
+        muted: payload.muted,
         updatedAt: Date.now(),
         controllerId: selfId.value
       }
@@ -4804,13 +4831,29 @@ function toggleSharedVideoPlayback() {
     }
 
     if (sharedVideoRef.value.paused) {
+      suppressShareEvents(500)
+      sharedVideoUi.playing = true
       sharedVideoRef.value.play().catch((error) => {
         console.error('视频播放失败:', error)
+      })
+      emitShareControl('play', {
+        playing: true,
+        currentTime: sharedVideoRef.value.currentTime || 0,
+        duration: Number(sharedVideoRef.value?.duration || activeShare.value?.sync?.duration || 0),
+        muted: sharedVideoMuted.value
       })
       return
     }
 
+    suppressShareEvents(500)
+    sharedVideoUi.playing = false
     sharedVideoRef.value.pause()
+    emitShareControl('pause', {
+      playing: false,
+      currentTime: sharedVideoRef.value.currentTime || 0,
+      duration: Number(sharedVideoRef.value?.duration || activeShare.value?.sync?.duration || 0),
+      muted: sharedVideoMuted.value
+    })
     return
   }
 
@@ -4857,15 +4900,22 @@ function handleSharedVideoProgressInput(event) {
   }
 
   try {
+    suppressShareEvents(500)
     sharedVideoRef.value.currentTime = nextTime
     sharedVideoUi.currentTime = nextTime
+    emitShareControl('seek', {
+      currentTime: nextTime,
+      playing: Boolean(sharedVideoRef.value && !sharedVideoRef.value.paused),
+      duration: Number(sharedVideoRef.value?.duration || activeShare.value?.sync?.duration || 0),
+      muted: sharedVideoMuted.value
+    })
   } catch (error) {
     console.error('设置播放进度失败:', error)
   }
 }
 
 function toggleSharedImageZoom() {
-  if (!activeShare.value || activeShare.value.kind !== 'image' || shouldSuppressShareEvents() || !canControlShare.value) {
+  if (!activeShare.value || activeShare.value.kind !== 'image' || shouldSuppressShareEvents() || !canManageSharedMedia.value) {
     return
   }
 
@@ -5522,9 +5572,10 @@ onUnmounted(() => {
 
 .video-control-panel {
   margin-top: 12px;
-  display: flex;
+  display: grid;
+  grid-template-columns: clamp(40px, 3vw, 52px) clamp(40px, 3vw, 52px) minmax(0, 1fr) auto clamp(40px, 3vw, 52px);
   align-items: center;
-  gap: 8px;
+  gap: clamp(8px, 1vw, 14px);
   width: 100%;
 }
 
@@ -5546,14 +5597,23 @@ onUnmounted(() => {
   border-radius: 999px;
   background: rgba(59, 130, 246, 0.16);
   color: #eff6ff;
-  padding: 8px 12px;
+  min-height: clamp(38px, 4vw, 48px);
+  padding: 0 clamp(10px, 1.4vw, 16px);
+}
+
+.playback-btn {
+  min-width: clamp(40px, 3vw, 52px);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .volume-btn {
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  padding: 8px;
+  width: clamp(40px, 3vw, 52px);
+  height: clamp(38px, 4vw, 48px);
+  min-width: clamp(40px, 3vw, 52px);
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5567,8 +5627,8 @@ onUnmounted(() => {
 }
 
 .control-icon {
-  width: 16px;
-  height: 16px;
+  width: clamp(16px, 1.5vw, 20px);
+  height: clamp(16px, 1.5vw, 20px);
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -5577,10 +5637,10 @@ onUnmounted(() => {
 }
 
 .fullscreen-btn {
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  padding: 8px;
+  width: clamp(40px, 3vw, 52px);
+  height: clamp(38px, 4vw, 48px);
+  min-width: clamp(40px, 3vw, 52px);
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5588,43 +5648,48 @@ onUnmounted(() => {
 }
 
 .progress-slider {
-  flex: 1;
-  min-width: 80px;
+  width: 100%;
+  min-width: 0;
   accent-color: #60a5fa;
 }
 
 :fullscreen .share-meta {
-  width: min(960px, 100%);
-}
-
-:fullscreen .video-control-panel {
-  width: min(960px, 100%);
-}
-
-:fullscreen .progress-slider {
-  min-width: 320px;
   width: 100%;
 }
 
+:fullscreen .video-control-panel {
+  width: 100%;
+  grid-template-columns: clamp(48px, 4.2vw, 60px) clamp(48px, 4.2vw, 60px) minmax(0, 1fr) auto clamp(48px, 4.2vw, 60px);
+}
+
+:fullscreen .progress-slider {
+  width: 100%;
+  min-width: 0;
+}
+
 .time-label {
-  font-size: 12px;
+  font-size: clamp(12px, 1.2vw, 14px);
   color: #e2e8f0;
-  min-width: 88px;
+  min-width: clamp(88px, 10vw, 126px);
   text-align: right;
 }
 
 .share-actions {
   display: flex;
-  gap: 10px;
+  gap: clamp(10px, 1vw, 14px);
 }
 
 .ghost-btn {
-  min-height: 42px;
+  min-height: clamp(38px, 4vw, 48px);
   border: 1px solid rgba(167, 185, 210, 0.14);
   background: rgba(255, 255, 255, 0.08);
   color: #f8fafc;
   border-radius: 14px;
-  padding: 0 14px;
+  padding: 0 clamp(12px, 1.6vw, 18px);
+}
+
+.close-share-btn {
+  white-space: nowrap;
 }
 
 .ghost-btn.danger {
