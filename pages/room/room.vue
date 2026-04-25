@@ -980,7 +980,7 @@
               placeholder="输入消息..."
               @keyup.enter="sendMessage"
             />
-            <button class="secondary-btn" @click="sendMessage">发送</button>
+            <button class="secondary-btn chat-send-btn" @click="sendMessage">发送</button>
           </div>
         </section>
       </aside>
@@ -7387,7 +7387,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   background: rgba(255, 255, 255, 0.05);
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-radius: 16px;
   border: 1px solid rgba(167, 185, 210, 0.1);
 }
@@ -7407,14 +7407,18 @@ onUnmounted(() => {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .participant-copy {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+}
+
+.participant-copy > span {
+  font-size: 13px;
 }
 
 .participant-tags,
@@ -7425,7 +7429,7 @@ onUnmounted(() => {
 }
 
 .participant-tag {
-  font-size: 12px;
+  font-size: 11px;
   color: #dbeafe;
 }
 
@@ -7438,12 +7442,13 @@ onUnmounted(() => {
 }
 
 .tiny-btn {
-  min-height: 38px;
+  min-height: 34px;
   border: 1px solid rgba(96, 165, 250, 0.14);
   border-radius: 12px;
   background: rgba(59, 130, 246, 0.14);
   color: #dbeafe;
-  padding: 0 12px;
+  padding: 0 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -7537,14 +7542,14 @@ onUnmounted(() => {
 .chat-device-actions {
   display: flex;
   flex-wrap: nowrap;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
 }
 
 .device-toggle {
   position: relative;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   border: 1px solid rgba(167, 185, 210, 0.16);
@@ -7615,18 +7620,23 @@ onUnmounted(() => {
 }
 
 .message-input {
-  min-height: 42px;
+  min-height: 40px;
   border: 1px solid rgba(167, 185, 210, 0.14);
   background: rgba(8, 15, 28, 0.64);
   color: #f8fafc;
   border-radius: 14px;
-  padding: 0 12px;
+  padding: 0 10px;
   min-width: 0;
 }
 
 .message-input:focus {
   border-color: rgba(96, 165, 250, 0.34);
   background: rgba(10, 18, 32, 0.88);
+}
+
+.chat-send-btn {
+  min-height: 40px;
+  padding: 0 14px;
 }
 
 @keyframes spin {

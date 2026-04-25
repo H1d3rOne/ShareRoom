@@ -26,3 +26,18 @@ test('视频共享区只保留一个关闭共享按钮', () => {
   assert.equal(closeShareMatches.length, 1)
   assert.doesNotMatch(roomVue, /class="ghost-btn danger close-share-btn" @click="closeSharedMedia">关闭</)
 })
+
+
+test('聊天输入区和成员区进一步紧凑化', () => {
+  assert.match(roomVue, /\.chat-device-actions\s*\{[^}]*gap:\s*4px;/s)
+  assert.match(roomVue, /\.device-toggle\s*\{[^}]*width:\s*40px;[^}]*height:\s*40px;/s)
+  assert.match(roomVue, /\.message-input\s*\{[^}]*min-height:\s*40px;[^}]*padding:\s*0 10px;/s)
+  assert.match(roomVue, /class="secondary-btn chat-send-btn" @click="sendMessage">发送</)
+  assert.match(roomVue, /\.chat-send-btn\s*\{[^}]*min-height:\s*40px;[^}]*padding:\s*0 14px;/s)
+  assert.match(roomVue, /\.participant-item\s*\{[^}]*padding:\s*10px 12px;/s)
+  assert.match(roomVue, /\.participant-main\s*\{[^}]*gap:\s*10px;/s)
+  assert.match(roomVue, /\.participant-copy\s*\{[^}]*gap:\s*6px;/s)
+  assert.match(roomVue, /\.participant-copy > span\s*\{[^}]*font-size:\s*13px;/s)
+  assert.match(roomVue, /\.participant-tag\s*\{[^}]*font-size:\s*11px;/s)
+  assert.match(roomVue, /\.tiny-btn\s*\{[^}]*min-height:\s*34px;[^}]*padding:\s*0 10px;[^}]*font-size:\s*12px;/s)
+})
