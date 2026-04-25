@@ -45,3 +45,5 @@ unpackage/
 
 # Git worktrees
 .worktrees/
+.superpowers/
+.playwright-cli/

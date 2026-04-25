@@ -1,0 +1,44 @@
+{
+  "name": "共享房间",
+  "appid": "__UNI__",
+  "description": "共享房间跨端应用",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": true,
+  "uniStatistics": {
+    "enable": true
+  },
+  "app-plus": {
+    "usingComponents": true,
+    "nvueStyleCompiler": "uni-app",
+    "compilerVersion": 3,
+    "splashscreen": {
+      "alwaysShowBeforeRender": true,
+      "waiting": true,
+      "autoclose": true,
+      "delay": 0
+    },
+    "modules": {
+      "Camera": {
+        "description": "摄像头"
+      },
+      "Recorder": {
+        "description": "录音机"
+      }
+    }
+  },
+  "mp-weixin": {
+    "appid": "",
+    "setting": {
+      "urlCheck": false
+    },
+    "usingComponents": true
+  },
+  "h5": {
+    "title": "共享房间",
+    "router": {
+      "base": ""
+    },
+    "domain": ""
+  }
+}

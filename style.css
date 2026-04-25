@@ -1,0 +1,110 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap');
+
+:root {
+  color-scheme: dark;
+  font-family: 'DM Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-display: 'Space Grotesk', 'DM Sans', 'PingFang SC', sans-serif;
+  --app-bg:
+    radial-gradient(circle at 12% 18%, rgba(37, 99, 235, 0.22), transparent 26%),
+    radial-gradient(circle at 84% 14%, rgba(225, 29, 72, 0.16), transparent 24%),
+    radial-gradient(circle at 72% 78%, rgba(249, 115, 22, 0.14), transparent 24%),
+    linear-gradient(160deg, #050b15 0%, #07111f 38%, #0d1728 100%);
+  --text-primary: #f8fbff;
+  --text-secondary: #c1cede;
+  --text-muted: #7f91a6;
+  --line-soft: rgba(167, 185, 210, 0.16);
+  --line-strong: rgba(167, 185, 210, 0.28);
+  --surface-1: rgba(8, 15, 28, 0.82);
+  --surface-2: rgba(10, 20, 36, 0.72);
+  --surface-3: rgba(255, 255, 255, 0.08);
+  --accent-blue: #3b82f6;
+  --accent-rose: #e11d48;
+  --accent-orange: #f97316;
+  --shadow-strong: 0 28px 80px rgba(1, 6, 16, 0.42);
+  --shadow-soft: 0 18px 48px rgba(1, 6, 16, 0.24);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100vh;
+}
+
+html {
+  background: #050b15;
+}
+
+body {
+  background: var(--app-bg);
+  color: var(--text-primary);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body::selection {
+  background: rgba(59, 130, 246, 0.26);
+  color: #ffffff;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.28);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+video,
+img {
+  object-fit: cover;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.34);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
