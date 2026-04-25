@@ -1071,31 +1071,11 @@ io.on('connection', (socket) => {
     room.adminSocketIds.add(socket.id)
     room.adminSocketIds.add(targetParticipant.id)
     broadcastParticipants(session.roomId, room)
-  })
 
-  socket.on('transfer-admin', (payload = {}) => {
-    const session = socketSessions.get(socket.id)
-    if (!session?.roomId || session.roomId !== payload.roomId) {
-      return
-    }
-
-    const room = rooms.get(session.roomId)
-    if (!room || room.superAdminSocketId !== socket.id) {
-      return
-    }
-
-    const targetParticipant = room.participants.get(payload.targetId)
-    if (!targetParticipant) {
-      return
-    }
-
-    setSuperAdmin(room, targetParticipant)
-    notifyAdminChanged(session.roomId, targetParticipant)
-
-    io.to(session.roomId).emit('admin-transferred', {
+    io.to(session.roomId).emit('admin-granted', {
       fromId: socket.id,
       fromName: session.userName,
-      toId: payload.targetId,
+      toId: targetParticipant.id,
       toName: targetParticipant.name
     })
   })

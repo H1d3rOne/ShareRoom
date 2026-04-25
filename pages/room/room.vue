@@ -5543,12 +5543,6 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.close-share-btn {
-  padding: 6px 14px;
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
 .progress-slider {
   flex: 1;
   min-width: 80px;
