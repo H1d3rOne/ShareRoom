@@ -30,7 +30,7 @@
             {{ isSuperAdmin ? '超级管理员' : isAdmin ? '管理员' : '普通成员' }}
           </span>
         </div>
-        <p class="room-hint">仅房主可共享文件并控制图片缩放、视频播放；其他成员实时同步观看。</p>
+        <p class="room-hint">仅管理员可共享文件并控制共享区域；普通成员可本地观看视频。</p>
       </div>
       <div class="header-actions">
         <button class="leave-btn" @click="leaveRoom">离开房间</button>
@@ -714,7 +714,7 @@
                 <div v-if="activeShare.kind === 'video'" class="video-control-panel">
                   <button
                     class="control-pill"
-                    :disabled="!canControlShare"
+                    :disabled="!canLocalControlSharedVideo"
                     @click="toggleSharedVideoPlayback"
                     :title="sharedVideoUi.playing ? '暂停' : '播放'"
                   >
@@ -729,7 +729,7 @@
                   <button
                     class="control-pill volume-btn"
                     :class="{ muted: sharedVideoMuted }"
-                    :disabled="!canControlShare"
+                    :disabled="!canLocalControlSharedVideo"
                     @click="toggleSharedVideoMute"
                     :title="sharedVideoMuted ? '开启声音' : '静音'"
                   >
@@ -751,7 +751,7 @@
                     :max="Math.max(sharedVideoUi.duration, 0)"
                     :step="0.1"
                     :value="Math.min(sharedVideoUi.currentTime, sharedVideoUi.duration || 0)"
-                    :disabled="!canControlShare || !sharedVideoUi.duration"
+                    :disabled="!canGlobalControlShare"
                     @input="handleSharedVideoProgressInput"
                     @change="handleSharedVideoProgressInput"
                   />
@@ -760,7 +760,7 @@
                   </span>
                   <button
                     class="control-pill fullscreen-btn"
-                    :disabled="!canControlShare"
+                    :disabled="!canLocalControlSharedVideo"
                     @click="toggleSharedVideoFullscreen"
                     title="全屏"
                   >
@@ -784,7 +784,7 @@
 
           <div v-else class="empty-share">
             <h3>共享区域</h3>
-            <p>{{ canShare ? '选择文件或开始屏幕共享后，房间成员会同步查看内容与操作状态。' : '等待房主共享图片、视频或屏幕，内容会自动同步到这里。' }}</p>
+            <p>{{ canShare ? '选择文件或开始屏幕共享后，房间成员会同步查看内容与操作状态。' : '等待管理员共享图片、视频或屏幕，内容会自动同步到这里。' }}</p>
           </div>
         </div>
 
@@ -793,7 +793,7 @@
             <button v-if="canShare" class="primary-btn" @click="chooseMedia">文件共享</button>
             <button v-if="canShare" class="secondary-btn" @click="startScreenShare">屏幕共享</button>
             <button v-if="canShare" class="secondary-btn" @click="openWebpageShareDialog">网页共享</button>
-            <button class="secondary-btn" :class="{ active: showGameMenu || activeGame || gameInvite }" @click="toggleGameMenu">
+            <button v-if="canOpenGameMenu" class="secondary-btn" :class="{ active: showGameMenu || activeGame || gameInvite }" @click="toggleGameMenu">
               {{ gameMenuButtonLabel }}
             </button>
             <button
@@ -1146,6 +1146,9 @@ const hasVisibleVideoTiles = computed(() => hasLocalVideo.value || participantsW
 const isSharingScreen = computed(() => activeShare.value?.kind === 'screen')
 const isShareOwner = computed(() => activeShare.value?.ownerId === selfId.value)
 const canShare = computed(() => isConnected.value && isAdmin.value)
+const canOpenGameMenu = computed(() => isConnected.value && isAdmin.value)
+const canGlobalControlShare = computed(() => isConnected.value && isAdmin.value)
+const canLocalControlSharedVideo = computed(() => Boolean(activeShare.value && activeShare.value.kind === 'video' && isConnected.value))
 const canControlShare = computed(() => isConnected.value && (isShareOwner.value || isRemoteController.value))
 const isValidWebpageUrl = computed(() => {
   const url = webpageUrlInput.value.trim()
