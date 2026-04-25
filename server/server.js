@@ -716,7 +716,6 @@ const serializeRoom = (room, viewerId = '') => ({
   superAdminSocketId: room.superAdminSocketId,
   superAdminClientId: room.superAdminClientId,
   adminSocketIds: Array.from(room.adminSocketIds),
-  adminSocketId: room.superAdminSocketId,
   controllerSocketId: room.controllerSocketId,
   controllerTargetSocketId: room.controllerTargetSocketId,
   gameInvite: serializeGameInvite(room.gameInvite),
@@ -728,7 +727,6 @@ const broadcastParticipants = (roomId, room) => {
     participants: serializeParticipants(room),
     superAdminSocketId: room.superAdminSocketId,
     adminSocketIds: Array.from(room.adminSocketIds),
-    adminSocketId: room.superAdminSocketId,
     controllerSocketId: room.controllerSocketId,
     controllerTargetSocketId: room.controllerTargetSocketId
   })
