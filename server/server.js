@@ -1002,7 +1002,8 @@ io.on('connection', (socket) => {
     room.participants.set(socket.id, participant)
 
     let adminChanged = false
-    if (room.superAdminClientId && room.superAdminClientId === clientId) {
+    const hasActiveSuperAdmin = Boolean(room.superAdminSocketId && room.participants.has(room.superAdminSocketId))
+    if (room.superAdminClientId && room.superAdminClientId === clientId && !hasActiveSuperAdmin) {
       setSuperAdmin(room, participant)
       adminChanged = true
     } else if (!room.superAdminSocketId && !room.superAdminClientId) {
