@@ -29,12 +29,29 @@ function wait(ms) {
 }
 
 function onceWithTimeout(socket, event, ms = 1500) {
-  return Promise.race([
-    once(socket, event),
-    wait(ms).then(() => {
-      throw new Error(`timed out waiting for ${event}`)
-    })
-  ])
+  return new Promise((resolve, reject) => {
+    let timer = null
+
+    const cleanup = () => {
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+      socket.off(event, handleEvent)
+    }
+
+    const handleEvent = (...args) => {
+      cleanup()
+      resolve(args)
+    }
+
+    timer = setTimeout(() => {
+      cleanup()
+      reject(new Error(`timed out waiting for ${event}`))
+    }, ms)
+
+    socket.on(event, handleEvent)
+  })
 }
 
 test('创建者是超级管理员，授予管理员不会丢失自己的管理权限', async (t) => {
@@ -242,8 +259,10 @@ test('最后一个管理员离开时房间关闭', async (t) => {
   await memberSawOwnerLeave
 
   let staleRoomEvent = false
-  admin.on('participants-changed', () => { staleRoomEvent = true })
-  admin.on('peer-joined', () => { staleRoomEvent = true })
+  const handleStaleParticipantsChanged = () => { staleRoomEvent = true }
+  const handleStalePeerJoined = () => { staleRoomEvent = true }
+  admin.on('participants-changed', handleStaleParticipantsChanged)
+  admin.on('peer-joined', handleStalePeerJoined)
 
   const memberSawAdminLeave = onceWithTimeout(member, 'peer-left')
   const roomClosed = onceWithTimeout(member, 'room-closed')
@@ -259,5 +278,7 @@ test('最后一个管理员离开时房间关闭', async (t) => {
   t.after(() => replacementOwner.close())
   await joinRoom(replacementOwner, '900005', '新创建者', 'replacement-owner-client')
   await wait(200)
+  admin.off('participants-changed', handleStaleParticipantsChanged)
+  admin.off('peer-joined', handleStalePeerJoined)
   assert.equal(staleRoomEvent, false)
 })
