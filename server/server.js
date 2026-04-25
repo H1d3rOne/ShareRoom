@@ -681,8 +681,9 @@ const getRoom = (roomId) => {
     rooms.set(roomId, {
       participants: new Map(),
       sharedMedia: null,
-      adminSocketId: null,
-      adminClientId: null,
+      superAdminSocketId: null,
+      superAdminClientId: null,
+      adminSocketIds: new Set(),
       controllerSocketId: null,
       controllerTargetSocketId: null,
       gameInvite: null,
@@ -692,12 +693,19 @@ const getRoom = (roomId) => {
   return rooms.get(roomId)
 }
 
+const isSuperAdminSocket = (room, socketId) => Boolean(socketId) && room.superAdminSocketId === socketId
+
+const isAdminSocket = (room, socketId) => (
+  Boolean(socketId) && (isSuperAdminSocket(room, socketId) || room.adminSocketIds.has(socketId))
+)
+
 const serializeParticipants = (room) => (
   Array.from(room.participants.values()).map((participant) => ({
     id: participant.id,
     name: participant.name,
     avatarId: participant.avatarId || '',
-    isAdmin: participant.id === room.adminSocketId,
+    isSuperAdmin: isSuperAdminSocket(room, participant.id),
+    isAdmin: isAdminSocket(room, participant.id),
     isController: participant.id === room.controllerSocketId
   }))
 )
@@ -705,7 +713,10 @@ const serializeParticipants = (room) => (
 const serializeRoom = (room, viewerId = '') => ({
   participants: serializeParticipants(room),
   sharedMedia: room.sharedMedia,
-  adminSocketId: room.adminSocketId,
+  superAdminSocketId: room.superAdminSocketId,
+  superAdminClientId: room.superAdminClientId,
+  adminSocketIds: Array.from(room.adminSocketIds),
+  adminSocketId: room.superAdminSocketId,
   controllerSocketId: room.controllerSocketId,
   controllerTargetSocketId: room.controllerTargetSocketId,
   gameInvite: serializeGameInvite(room.gameInvite),
@@ -715,21 +726,28 @@ const serializeRoom = (room, viewerId = '') => ({
 const broadcastParticipants = (roomId, room) => {
   io.to(roomId).emit('participants-changed', {
     participants: serializeParticipants(room),
-    adminSocketId: room.adminSocketId,
+    superAdminSocketId: room.superAdminSocketId,
+    adminSocketIds: Array.from(room.adminSocketIds),
+    adminSocketId: room.superAdminSocketId,
     controllerSocketId: room.controllerSocketId,
     controllerTargetSocketId: room.controllerTargetSocketId
   })
 }
 
-const setAdmin = (room, participant) => {
+const setSuperAdmin = (room, participant) => {
   if (!participant) {
-    room.adminSocketId = null
-    room.adminClientId = null
+    room.superAdminSocketId = null
+    room.superAdminClientId = null
     return null
   }
 
-  room.adminSocketId = participant.id
-  room.adminClientId = participant.clientId
+  if (room.superAdminSocketId && room.superAdminSocketId !== participant.id) {
+    room.adminSocketIds.delete(room.superAdminSocketId)
+  }
+
+  room.superAdminSocketId = participant.id
+  room.superAdminClientId = participant.clientId
+  room.adminSocketIds.add(participant.id)
   return participant
 }
 
@@ -742,7 +760,9 @@ const setController = (room, participant, targetParticipant = null) => {
 const notifyAdminChanged = (roomId, participant) => {
   io.to(roomId).emit('admin-changed', {
     adminId: participant?.id || null,
-    adminName: participant?.name || null
+    adminName: participant?.name || null,
+    superAdminId: participant?.id || null,
+    superAdminName: participant?.name || null
   })
 }
 
@@ -817,10 +837,12 @@ const leaveCurrentRoom = (socket, options = {}) => {
     return
   }
 
-  const wasAdmin = room.adminSocketId === socket.id
+  const wasSuperAdmin = room.superAdminSocketId === socket.id
+  const wasAdmin = room.adminSocketIds.has(socket.id)
   const wasController = room.controllerSocketId === socket.id
   const wasControllerTarget = room.controllerTargetSocketId === socket.id
   room.participants.delete(socket.id)
+  room.adminSocketIds.delete(socket.id)
 
   if (announce) {
     socket.to(roomId).emit('peer-left', {
@@ -838,7 +860,7 @@ const leaveCurrentRoom = (socket, options = {}) => {
     })
   }
 
-  if (wasAdmin) {
+  if (wasSuperAdmin) {
     if (releaseAdmin) {
       io.to(roomId).emit('room-closed', {
         reason: 'admin-left',
@@ -847,9 +869,11 @@ const leaveCurrentRoom = (socket, options = {}) => {
       rooms.delete(roomId)
       socketSessions.delete(socket.id)
       return
-    } else if (room.adminClientId === clientId) {
-      room.adminSocketId = null
+    } else if (room.superAdminClientId === clientId) {
+      room.superAdminSocketId = null
     }
+  } else if (wasAdmin) {
+    room.adminSocketIds.delete(socket.id)
   }
 
   if (wasController || wasControllerTarget) {
@@ -966,11 +990,11 @@ io.on('connection', (socket) => {
     room.participants.set(socket.id, participant)
 
     let adminChanged = false
-    if (room.adminClientId && room.adminClientId === clientId) {
-      setAdmin(room, participant)
+    if (room.superAdminClientId && room.superAdminClientId === clientId) {
+      setSuperAdmin(room, participant)
       adminChanged = true
-    } else if (!room.adminSocketId && !room.adminClientId) {
-      setAdmin(room, participant)
+    } else if (!room.superAdminSocketId && !room.superAdminClientId) {
+      setSuperAdmin(room, participant)
       adminChanged = true
     }
 
@@ -992,7 +1016,8 @@ io.on('connection', (socket) => {
         id: socket.id,
         name: userName,
         avatarId,
-        isAdmin: room.adminSocketId === socket.id,
+        isSuperAdmin: room.superAdminSocketId === socket.id,
+        isAdmin: isAdminSocket(room, socket.id),
         isController: room.controllerSocketId === socket.id
       }
     })
@@ -1015,6 +1040,27 @@ io.on('connection', (socket) => {
     leaveCurrentRoom(socket, { announce: true, releaseAdmin: true })
   })
 
+  socket.on('grant-admin', (payload = {}) => {
+    const session = socketSessions.get(socket.id)
+    if (!session?.roomId || session.roomId !== payload.roomId) {
+      return
+    }
+
+    const room = rooms.get(session.roomId)
+    if (!room || room.superAdminSocketId !== socket.id) {
+      return
+    }
+
+    const targetParticipant = room.participants.get(payload.targetId)
+    if (!targetParticipant || targetParticipant.id === socket.id) {
+      return
+    }
+
+    room.adminSocketIds.add(socket.id)
+    room.adminSocketIds.add(targetParticipant.id)
+    broadcastParticipants(session.roomId, room)
+  })
+
   socket.on('transfer-admin', (payload = {}) => {
     const session = socketSessions.get(socket.id)
     if (!session?.roomId || session.roomId !== payload.roomId) {
@@ -1022,7 +1068,7 @@ io.on('connection', (socket) => {
     }
 
     const room = rooms.get(session.roomId)
-    if (!room || room.adminSocketId !== socket.id) {
+    if (!room || room.superAdminSocketId !== socket.id) {
       return
     }
 
@@ -1031,7 +1077,7 @@ io.on('connection', (socket) => {
       return
     }
 
-    setAdmin(room, targetParticipant)
+    setSuperAdmin(room, targetParticipant)
     notifyAdminChanged(session.roomId, targetParticipant)
 
     io.to(session.roomId).emit('admin-transferred', {
@@ -1171,9 +1217,9 @@ io.on('connection', (socket) => {
     if (
       ![
         room.gameInvite.inviterId,
-        ...(room.gameInvite.invitees || []).map((item) => item.id),
-        room.adminSocketId
+        ...(room.gameInvite.invitees || []).map((item) => item.id)
       ].includes(socket.id)
+      && !isAdminSocket(room, socket.id)
     ) {
       return
     }
@@ -1654,7 +1700,7 @@ io.on('connection', (socket) => {
       return
     }
 
-    if (room.adminSocketId !== socket.id) {
+    if (!isAdminSocket(room, socket.id)) {
       socket.emit('permission-denied', {
         action: 'share-start',
         message: '只有房主可以共享文件'
@@ -1842,7 +1888,7 @@ io.on('connection', (socket) => {
       return
     }
 
-    if (room.adminSocketId !== socket.id) {
+    if (!isAdminSocket(room, socket.id)) {
       socket.emit('permission-denied', {
         action: 'share-close',
         message: '只有房主可以关闭共享'
