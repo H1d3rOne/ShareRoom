@@ -4699,7 +4699,7 @@ function handleSharedVideoPlaying() {
 }
 
 function handleSharedVideoPlay() {
-  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canControlShare.value) {
+  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canGlobalControlShare.value) {
     return
   }
   sharedVideoUi.playing = true
@@ -4711,7 +4711,7 @@ function handleSharedVideoPlay() {
 }
 
 function handleSharedVideoPause() {
-  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canControlShare.value) {
+  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canGlobalControlShare.value) {
     return
   }
   sharedVideoUi.playing = false
@@ -4723,7 +4723,7 @@ function handleSharedVideoPause() {
 }
 
 function handleSharedVideoSeek() {
-  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canControlShare.value) {
+  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canGlobalControlShare.value) {
     return
   }
 
@@ -4742,7 +4742,7 @@ function handleSharedVideoTimeUpdate() {
     sharedVideoUi.playing = Boolean(!sharedVideoRef.value.paused && !sharedVideoRef.value.ended)
   }
 
-  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canControlShare.value) {
+  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canGlobalControlShare.value) {
     return
   }
 
@@ -4764,32 +4764,52 @@ function handleSharedVideoTimeUpdate() {
 }
 
 function toggleSharedVideoPlayback() {
-  if (!canControlShare.value || activeShare.value?.kind !== 'video' || !sharedVideoRef.value) {
+  if (!canLocalControlSharedVideo.value || activeShare.value?.kind !== 'video' || !sharedVideoRef.value) {
     return
   }
 
-  if (shouldUseSyncedVideoUi()) {
-    const nextPlaying = !sharedVideoUi.playing
-    sharedVideoUi.playing = nextPlaying
-    suppressShareEvents(500)
-    if (nextPlaying) {
-      sharedVideoRef.value.play().catch((error) => {
-        console.error('实时流本地播放失败:', error)
+  if (canGlobalControlShare.value) {
+    if (shouldUseSyncedVideoUi()) {
+      const nextPlaying = !sharedVideoUi.playing
+      sharedVideoUi.playing = nextPlaying
+      suppressShareEvents(500)
+      if (nextPlaying) {
+        sharedVideoRef.value.play().catch((error) => {
+          console.error('实时流本地播放失败:', error)
+        })
+      } else {
+        sharedVideoRef.value.pause()
+      }
+      emitShareControl(nextPlaying ? 'play' : 'pause', {
+        playing: nextPlaying,
+        currentTime: sharedVideoUi.currentTime,
+        duration: sharedVideoUi.duration
       })
-    } else {
-      sharedVideoRef.value.pause()
+      return
     }
-    emitShareControl(nextPlaying ? 'play' : 'pause', {
-      playing: nextPlaying,
-      currentTime: sharedVideoUi.currentTime,
-      duration: sharedVideoUi.duration
-    })
+
+    if (sharedVideoRef.value.paused) {
+      sharedVideoRef.value.play().catch((error) => {
+        console.error('视频播放失败:', error)
+      })
+      return
+    }
+
+    sharedVideoRef.value.pause()
     return
   }
 
   if (sharedVideoRef.value.paused) {
+    const syncedTime = getVideoSyncTime(activeShare.value.sync)
+    try {
+      sharedVideoRef.value.currentTime = Math.min(syncedTime, sharedVideoRef.value.duration || syncedTime)
+      sharedVideoUi.currentTime = syncedTime
+    } catch (error) {
+      console.error('恢复本地视频进度失败:', error)
+    }
+
     sharedVideoRef.value.play().catch((error) => {
-      console.error('视频播放失败:', error)
+      console.error('本地恢复视频播放失败:', error)
     })
     return
   }
@@ -4798,7 +4818,7 @@ function toggleSharedVideoPlayback() {
 }
 
 function handleSharedVideoProgressInput(event) {
-  if (!canControlShare.value || activeShare.value?.kind !== 'video' || !sharedVideoRef.value) {
+  if (!canGlobalControlShare.value || activeShare.value?.kind !== 'video' || !sharedVideoRef.value) {
     return
   }
 
@@ -5550,6 +5570,15 @@ onUnmounted(() => {
   flex: 1;
   min-width: 80px;
   accent-color: #60a5fa;
+}
+
+:fullscreen .video-control-panel {
+  width: min(960px, 100%);
+}
+
+:fullscreen .progress-slider {
+  min-width: 320px;
+  width: 100%;
 }
 
 .time-label {

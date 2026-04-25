@@ -54,3 +54,14 @@ test('共享区权限与视频控制按管理员全局/成员本地分层', () =
   assert.match(roomVue, /:disabled="!canLocalControlSharedVideo"[\s\S]*@click="toggleSharedVideoMute"/)
   assert.match(roomVue, /:disabled="!canLocalControlSharedVideo"[\s\S]*@click="toggleSharedVideoFullscreen"/)
 })
+
+
+test('普通成员恢复本地视频播放会追到全局进度，且全屏态进度条扩展', () => {
+  assert.match(roomVue, /if \(!canLocalControlSharedVideo\.value \|\| activeShare\.value\?\.kind !== 'video' \|\| !sharedVideoRef\.value\) \{/) 
+  assert.match(roomVue, /if \(canGlobalControlShare\.value\) \{[\s\S]*emitShareControl\(nextPlaying \? 'play' : 'pause'/)
+  assert.match(roomVue, /const syncedTime = getVideoSyncTime\(activeShare\.value\.sync\)/)
+  assert.match(roomVue, /sharedVideoRef\.value\.currentTime = Math\.min\(syncedTime, sharedVideoRef\.value\.duration \|\| syncedTime\)/)
+  assert.match(roomVue, /sharedVideoRef\.value\.play\(\)\.catch\(\(error\) => \{/)
+  assert.match(roomVue, /:fullscreen \.video-control-panel[\s\S]*width: min\(960px, 100%\);/)
+  assert.match(roomVue, /:fullscreen \.progress-slider[\s\S]*min-width: 320px;/)
+})
