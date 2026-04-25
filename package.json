@@ -10,7 +10,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "start-all": "./start-all.sh",
-    "install-all": "./install.sh"
+    "install-all": "./install.sh",
+    "test": "node --test tests/**/*.test.mjs"
   },
   "dependencies": {
     "express": "^5.2.1",

@@ -27,10 +27,10 @@
             <span>{{ displayName }}</span>
           </span>
           <span class="participant-chip" :class="isAdmin ? 'admin-chip' : 'member-chip'">
-            {{ isAdmin ? '房主 / 管理员' : '普通成员' }}
+            {{ isSuperAdmin ? '超级管理员' : isAdmin ? '管理员' : '普通成员' }}
           </span>
         </div>
-        <p class="room-hint">仅房主可共享文件并控制图片缩放、视频播放；其他成员实时同步观看。</p>
+        <p class="room-hint">仅管理员可共享文件并控制共享区域；普通成员可本地观看视频。</p>
       </div>
       <div class="header-actions">
         <button class="leave-btn" @click="leaveRoom">离开房间</button>
@@ -714,7 +714,7 @@
                 <div v-if="activeShare.kind === 'video'" class="video-control-panel">
                   <button
                     class="control-pill"
-                    :disabled="!canControlShare"
+                    :disabled="!canLocalControlSharedVideo"
                     @click="toggleSharedVideoPlayback"
                     :title="sharedVideoUi.playing ? '暂停' : '播放'"
                   >
@@ -729,7 +729,7 @@
                   <button
                     class="control-pill volume-btn"
                     :class="{ muted: sharedVideoMuted }"
-                    :disabled="!canControlShare"
+                    :disabled="!canLocalControlSharedVideo"
                     @click="toggleSharedVideoMute"
                     :title="sharedVideoMuted ? '开启声音' : '静音'"
                   >
@@ -751,7 +751,7 @@
                     :max="Math.max(sharedVideoUi.duration, 0)"
                     :step="0.1"
                     :value="Math.min(sharedVideoUi.currentTime, sharedVideoUi.duration || 0)"
-                    :disabled="!canControlShare || !sharedVideoUi.duration"
+                    :disabled="!canGlobalControlShare"
                     @input="handleSharedVideoProgressInput"
                     @change="handleSharedVideoProgressInput"
                   />
@@ -760,7 +760,7 @@
                   </span>
                   <button
                     class="control-pill fullscreen-btn"
-                    :disabled="!canControlShare"
+                    :disabled="!canLocalControlSharedVideo"
                     @click="toggleSharedVideoFullscreen"
                     title="全屏"
                   >
@@ -771,7 +771,6 @@
                       <line x1="3" y1="21" x2="10" y2="14"/>
                     </svg>
                   </button>
-                  <button v-if="canShare" class="ghost-btn danger close-share-btn" @click="closeSharedMedia">关闭</button>
                 </div>
               </div>
               <div class="share-actions">
@@ -785,7 +784,7 @@
 
           <div v-else class="empty-share">
             <h3>共享区域</h3>
-            <p>{{ canShare ? '选择文件或开始屏幕共享后，房间成员会同步查看内容与操作状态。' : '等待房主共享图片、视频或屏幕，内容会自动同步到这里。' }}</p>
+            <p>{{ canShare ? '选择文件或开始屏幕共享后，房间成员会同步查看内容与操作状态。' : '等待管理员共享图片、视频或屏幕，内容会自动同步到这里。' }}</p>
           </div>
         </div>
 
@@ -794,7 +793,7 @@
             <button v-if="canShare" class="primary-btn" @click="chooseMedia">文件共享</button>
             <button v-if="canShare" class="secondary-btn" @click="startScreenShare">屏幕共享</button>
             <button v-if="canShare" class="secondary-btn" @click="openWebpageShareDialog">网页共享</button>
-            <button class="secondary-btn" :class="{ active: showGameMenu || activeGame || gameInvite }" @click="toggleGameMenu">
+            <button v-if="canOpenGameMenu" class="secondary-btn" :class="{ active: showGameMenu || activeGame || gameInvite }" @click="toggleGameMenu">
               {{ gameMenuButtonLabel }}
             </button>
             <button
@@ -855,12 +854,12 @@
               :key="peer.id"
             >
               <div class="participant-main">
-                <UserAvatar :avatar-id="peer.avatarId" :name="peer.name" :size="42" />
+                <UserAvatar :avatar-id="peer.avatarId" :name="peer.name" :size="38" />
                 <div class="participant-copy">
                   <span>{{ peer.name }}</span>
                   <div class="participant-tags">
                     <span class="participant-tag">
-                      {{ peer.isAdmin ? '管理员' : peer.id === selfId ? '我' : isPeerConnected(peer.id) ? '已连接' : '连接中' }}
+                      {{ peer.isSuperAdmin ? '超级管理员' : peer.isAdmin ? '管理员' : peer.id === selfId ? '我' : isPeerConnected(peer.id) ? '已连接' : '连接中' }}
                     </span>
                     <span v-if="peer.isController" class="participant-tag controller-tag">远控中</span>
                     <span v-if="getParticipantSeatLabel(peer.id)" class="participant-tag seat-tag">{{ getParticipantSeatLabel(peer.id) }}</span>
@@ -877,9 +876,9 @@
                   {{ getInvitePeerActionLabel() }}
                 </button>
                 <button
-                  v-if="isAdmin && !peer.isAdmin && peer.id !== selfId"
+                  v-if="canGrantAdmin && !peer.isSuperAdmin && !peer.isAdmin && peer.id !== selfId"
                   class="tiny-btn admin-transfer-btn"
-                  @click="transferAdminTo(peer)"
+                  @click="grantAdminTo(peer)"
                 >
                   授予管理员
                 </button>
@@ -981,7 +980,7 @@
               placeholder="输入消息..."
               @keyup.enter="sendMessage"
             />
-            <button class="secondary-btn" @click="sendMessage">发送</button>
+            <button class="secondary-btn chat-send-btn" @click="sendMessage">发送</button>
           </div>
         </section>
       </aside>
@@ -1134,7 +1133,9 @@ const selfParticipant = computed(() => {
 })
 const selfAvatarId = computed(() => selfParticipant.value?.avatarId || avatarId.value)
 const otherParticipants = computed(() => participants.value.filter((peer) => peer.id !== selfId.value))
+const isSuperAdmin = computed(() => participants.value.find((peer) => peer.id === selfId.value)?.isSuperAdmin || false)
 const isAdmin = computed(() => participants.value.find((peer) => peer.id === selfId.value)?.isAdmin || false)
+const canGrantAdmin = computed(() => isConnected.value && isSuperAdmin.value)
 const isRemoteController = computed(() => participants.value.find((peer) => peer.id === selfId.value)?.isController || false)
 const isRemoteControlTarget = computed(() => remoteControlTargetId.value === selfId.value)
 const hasLocalVideo = computed(() => hasLiveVideoTrack(localMediaStream.value))
@@ -1145,6 +1146,9 @@ const hasVisibleVideoTiles = computed(() => hasLocalVideo.value || participantsW
 const isSharingScreen = computed(() => activeShare.value?.kind === 'screen')
 const isShareOwner = computed(() => activeShare.value?.ownerId === selfId.value)
 const canShare = computed(() => isConnected.value && isAdmin.value)
+const canOpenGameMenu = computed(() => isConnected.value && isAdmin.value)
+const canGlobalControlShare = computed(() => isConnected.value && isAdmin.value)
+const canLocalControlSharedVideo = computed(() => Boolean(activeShare.value && activeShare.value.kind === 'video' && isConnected.value))
 const canControlShare = computed(() => isConnected.value && (isShareOwner.value || isRemoteController.value))
 const isValidWebpageUrl = computed(() => {
   const url = webpageUrlInput.value.trim()
@@ -4022,8 +4026,8 @@ function connectSocket() {
     }, 1500)
   })
 
-  socket.value.on('admin-transferred', (payload) => {
-    pushSystemMessage(`${payload.fromName} 将管理员权限转移给了 ${payload.toName}`)
+  socket.value.on('admin-granted', (payload) => {
+    pushSystemMessage(`${payload.grantedByName} 已授予 ${payload.targetName} 管理员权限`)
   })
 
   socket.value.on('webpage-share', (payload) => {
@@ -4695,7 +4699,7 @@ function handleSharedVideoPlaying() {
 }
 
 function handleSharedVideoPlay() {
-  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canControlShare.value) {
+  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canGlobalControlShare.value) {
     return
   }
   sharedVideoUi.playing = true
@@ -4707,7 +4711,7 @@ function handleSharedVideoPlay() {
 }
 
 function handleSharedVideoPause() {
-  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canControlShare.value) {
+  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canGlobalControlShare.value) {
     return
   }
   sharedVideoUi.playing = false
@@ -4719,7 +4723,7 @@ function handleSharedVideoPause() {
 }
 
 function handleSharedVideoSeek() {
-  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canControlShare.value) {
+  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canGlobalControlShare.value) {
     return
   }
 
@@ -4738,7 +4742,7 @@ function handleSharedVideoTimeUpdate() {
     sharedVideoUi.playing = Boolean(!sharedVideoRef.value.paused && !sharedVideoRef.value.ended)
   }
 
-  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canControlShare.value) {
+  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canGlobalControlShare.value) {
     return
   }
 
@@ -4760,32 +4764,52 @@ function handleSharedVideoTimeUpdate() {
 }
 
 function toggleSharedVideoPlayback() {
-  if (!canControlShare.value || activeShare.value?.kind !== 'video' || !sharedVideoRef.value) {
+  if (!canLocalControlSharedVideo.value || activeShare.value?.kind !== 'video' || !sharedVideoRef.value) {
     return
   }
 
-  if (shouldUseSyncedVideoUi()) {
-    const nextPlaying = !sharedVideoUi.playing
-    sharedVideoUi.playing = nextPlaying
-    suppressShareEvents(500)
-    if (nextPlaying) {
-      sharedVideoRef.value.play().catch((error) => {
-        console.error('实时流本地播放失败:', error)
+  if (canGlobalControlShare.value) {
+    if (shouldUseSyncedVideoUi()) {
+      const nextPlaying = !sharedVideoUi.playing
+      sharedVideoUi.playing = nextPlaying
+      suppressShareEvents(500)
+      if (nextPlaying) {
+        sharedVideoRef.value.play().catch((error) => {
+          console.error('实时流本地播放失败:', error)
+        })
+      } else {
+        sharedVideoRef.value.pause()
+      }
+      emitShareControl(nextPlaying ? 'play' : 'pause', {
+        playing: nextPlaying,
+        currentTime: sharedVideoUi.currentTime,
+        duration: sharedVideoUi.duration
       })
-    } else {
-      sharedVideoRef.value.pause()
+      return
     }
-    emitShareControl(nextPlaying ? 'play' : 'pause', {
-      playing: nextPlaying,
-      currentTime: sharedVideoUi.currentTime,
-      duration: sharedVideoUi.duration
-    })
+
+    if (sharedVideoRef.value.paused) {
+      sharedVideoRef.value.play().catch((error) => {
+        console.error('视频播放失败:', error)
+      })
+      return
+    }
+
+    sharedVideoRef.value.pause()
     return
   }
 
   if (sharedVideoRef.value.paused) {
+    const syncedTime = getVideoSyncTime(activeShare.value.sync)
+    try {
+      sharedVideoRef.value.currentTime = Math.min(syncedTime, sharedVideoRef.value.duration || syncedTime)
+      sharedVideoUi.currentTime = syncedTime
+    } catch (error) {
+      console.error('恢复本地视频进度失败:', error)
+    }
+
     sharedVideoRef.value.play().catch((error) => {
-      console.error('视频播放失败:', error)
+      console.error('本地恢复视频播放失败:', error)
     })
     return
   }
@@ -4794,7 +4818,7 @@ function toggleSharedVideoPlayback() {
 }
 
 function handleSharedVideoProgressInput(event) {
-  if (!canControlShare.value || activeShare.value?.kind !== 'video' || !sharedVideoRef.value) {
+  if (!canGlobalControlShare.value || activeShare.value?.kind !== 'video' || !sharedVideoRef.value) {
     return
   }
 
@@ -4893,18 +4917,16 @@ function leaveRoom() {
   router.push('/')
 }
 
-function transferAdminTo(peer) {
-  if (!isAdmin.value || !socket.value?.connected) return
+function grantAdminTo(peer) {
+  if (!canGrantAdmin.value || !socket.value?.connected) return
 
-  const confirmed = confirm(`确定将管理员权限转移给 ${peer.name} 吗？\n转移后你将失去管理员权限。`)
+  const confirmed = confirm(`确定授予 ${peer.name} 管理员权限吗？`)
   if (!confirmed) return
 
-  socket.value.emit('transfer-admin', {
+  socket.value.emit('grant-admin', {
     roomId: roomId.value,
     targetId: peer.id
   })
-
-  pushSystemMessage(`已将管理员权限转移给 ${peer.name}`)
 }
 
 watch(localMediaStream, async () => {
@@ -5544,16 +5566,19 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.close-share-btn {
-  padding: 6px 14px;
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
 .progress-slider {
   flex: 1;
   min-width: 80px;
   accent-color: #60a5fa;
+}
+
+:fullscreen .video-control-panel {
+  width: min(960px, 100%);
+}
+
+:fullscreen .progress-slider {
+  min-width: 320px;
+  width: 100%;
 }
 
 .time-label {
@@ -7394,7 +7419,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   background: rgba(255, 255, 255, 0.05);
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-radius: 16px;
   border: 1px solid rgba(167, 185, 210, 0.1);
 }
@@ -7414,14 +7439,18 @@ onUnmounted(() => {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .participant-copy {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+}
+
+.participant-copy > span {
+  font-size: 13px;
 }
 
 .participant-tags,
@@ -7432,7 +7461,7 @@ onUnmounted(() => {
 }
 
 .participant-tag {
-  font-size: 12px;
+  font-size: 11px;
   color: #dbeafe;
 }
 
@@ -7445,12 +7474,13 @@ onUnmounted(() => {
 }
 
 .tiny-btn {
-  min-height: 38px;
+  min-height: 34px;
   border: 1px solid rgba(96, 165, 250, 0.14);
   border-radius: 12px;
   background: rgba(59, 130, 246, 0.14);
   color: #dbeafe;
-  padding: 0 12px;
+  padding: 0 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -7544,14 +7574,14 @@ onUnmounted(() => {
 .chat-device-actions {
   display: flex;
   flex-wrap: nowrap;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
 }
 
 .device-toggle {
   position: relative;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   border: 1px solid rgba(167, 185, 210, 0.16);
@@ -7622,18 +7652,23 @@ onUnmounted(() => {
 }
 
 .message-input {
-  min-height: 42px;
+  min-height: 40px;
   border: 1px solid rgba(167, 185, 210, 0.14);
   background: rgba(8, 15, 28, 0.64);
   color: #f8fafc;
   border-radius: 14px;
-  padding: 0 12px;
+  padding: 0 10px;
   min-width: 0;
 }
 
 .message-input:focus {
   border-color: rgba(96, 165, 250, 0.34);
   background: rgba(10, 18, 32, 0.88);
+}
+
+.chat-send-btn {
+  min-height: 40px;
+  padding: 0 14px;
 }
 
 @keyframes spin {
