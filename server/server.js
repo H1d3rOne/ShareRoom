@@ -1073,10 +1073,10 @@ io.on('connection', (socket) => {
     broadcastParticipants(session.roomId, room)
 
     io.to(session.roomId).emit('admin-granted', {
-      fromId: socket.id,
-      fromName: session.userName,
-      toId: targetParticipant.id,
-      toName: targetParticipant.name
+      grantedById: socket.id,
+      grantedByName: session.userName,
+      targetId: targetParticipant.id,
+      targetName: targetParticipant.name
     })
   })
 
