@@ -27,7 +27,7 @@
             <span>{{ displayName }}</span>
           </span>
           <span class="participant-chip" :class="isAdmin ? 'admin-chip' : 'member-chip'">
-            {{ isAdmin ? '房主 / 管理员' : '普通成员' }}
+            {{ isSuperAdmin ? '超级管理员' : isAdmin ? '管理员' : '普通成员' }}
           </span>
         </div>
         <p class="room-hint">仅房主可共享文件并控制图片缩放、视频播放；其他成员实时同步观看。</p>
@@ -771,7 +771,6 @@
                       <line x1="3" y1="21" x2="10" y2="14"/>
                     </svg>
                   </button>
-                  <button v-if="canShare" class="ghost-btn danger close-share-btn" @click="closeSharedMedia">关闭</button>
                 </div>
               </div>
               <div class="share-actions">
@@ -855,12 +854,12 @@
               :key="peer.id"
             >
               <div class="participant-main">
-                <UserAvatar :avatar-id="peer.avatarId" :name="peer.name" :size="42" />
+                <UserAvatar :avatar-id="peer.avatarId" :name="peer.name" :size="38" />
                 <div class="participant-copy">
                   <span>{{ peer.name }}</span>
                   <div class="participant-tags">
                     <span class="participant-tag">
-                      {{ peer.isAdmin ? '管理员' : peer.id === selfId ? '我' : isPeerConnected(peer.id) ? '已连接' : '连接中' }}
+                      {{ peer.isSuperAdmin ? '超级管理员' : peer.isAdmin ? '管理员' : peer.id === selfId ? '我' : isPeerConnected(peer.id) ? '已连接' : '连接中' }}
                     </span>
                     <span v-if="peer.isController" class="participant-tag controller-tag">远控中</span>
                     <span v-if="getParticipantSeatLabel(peer.id)" class="participant-tag seat-tag">{{ getParticipantSeatLabel(peer.id) }}</span>
@@ -877,9 +876,9 @@
                   {{ getInvitePeerActionLabel() }}
                 </button>
                 <button
-                  v-if="isAdmin && !peer.isAdmin && peer.id !== selfId"
+                  v-if="canGrantAdmin && !peer.isSuperAdmin && !peer.isAdmin && peer.id !== selfId"
                   class="tiny-btn admin-transfer-btn"
-                  @click="transferAdminTo(peer)"
+                  @click="grantAdminTo(peer)"
                 >
                   授予管理员
                 </button>
@@ -1134,7 +1133,9 @@ const selfParticipant = computed(() => {
 })
 const selfAvatarId = computed(() => selfParticipant.value?.avatarId || avatarId.value)
 const otherParticipants = computed(() => participants.value.filter((peer) => peer.id !== selfId.value))
+const isSuperAdmin = computed(() => participants.value.find((peer) => peer.id === selfId.value)?.isSuperAdmin || false)
 const isAdmin = computed(() => participants.value.find((peer) => peer.id === selfId.value)?.isAdmin || false)
+const canGrantAdmin = computed(() => isConnected.value && isSuperAdmin.value)
 const isRemoteController = computed(() => participants.value.find((peer) => peer.id === selfId.value)?.isController || false)
 const isRemoteControlTarget = computed(() => remoteControlTargetId.value === selfId.value)
 const hasLocalVideo = computed(() => hasLiveVideoTrack(localMediaStream.value))
@@ -4022,8 +4023,8 @@ function connectSocket() {
     }, 1500)
   })
 
-  socket.value.on('admin-transferred', (payload) => {
-    pushSystemMessage(`${payload.fromName} 将管理员权限转移给了 ${payload.toName}`)
+  socket.value.on('admin-granted', (payload) => {
+    pushSystemMessage(`${payload.grantedByName} 已授予 ${payload.targetName} 管理员权限`)
   })
 
   socket.value.on('webpage-share', (payload) => {
@@ -4893,18 +4894,16 @@ function leaveRoom() {
   router.push('/')
 }
 
-function transferAdminTo(peer) {
-  if (!isAdmin.value || !socket.value?.connected) return
+function grantAdminTo(peer) {
+  if (!canGrantAdmin.value || !socket.value?.connected) return
 
-  const confirmed = confirm(`确定将管理员权限转移给 ${peer.name} 吗？\n转移后你将失去管理员权限。`)
+  const confirmed = confirm(`确定授予 ${peer.name} 管理员权限吗？`)
   if (!confirmed) return
 
-  socket.value.emit('transfer-admin', {
+  socket.value.emit('grant-admin', {
     roomId: roomId.value,
     targetId: peer.id
   })
-
-  pushSystemMessage(`已将管理员权限转移给 ${peer.name}`)
 }
 
 watch(localMediaStream, async () => {
