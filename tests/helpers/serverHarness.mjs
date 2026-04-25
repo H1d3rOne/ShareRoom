@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
+import net from 'node:net'
 
 function hasExited(child) {
   return child.exitCode !== null || child.signalCode !== null
@@ -12,6 +13,33 @@ function waitForExit(child, timeout) {
       setTimeout(() => reject(new Error(`process exit timeout after ${timeout}ms`)), timeout)
     })
   ])
+}
+
+export async function getAvailablePort() {
+  const server = net.createServer()
+
+  try {
+    await new Promise((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', resolve)
+    })
+
+    const address = server.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('failed to allocate TCP port')
+    }
+
+    return address.port
+  } finally {
+    if (server.listening) {
+      await new Promise((resolve, reject) => {
+        server.close((error) => {
+          if (error) reject(error)
+          else resolve()
+        })
+      })
+    }
+  }
 }
 
 export async function startServer(port, options = {}) {
