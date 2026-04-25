@@ -1058,6 +1058,7 @@ const webpageIframeRef = ref(null)
 const webpageUrlInputRef = ref(null)
 const webpageLoaded = ref(false)
 const sharedVideoMuted = ref(true)
+const sharedVideoLocalPaused = ref(false)
 const lastVideoHeartbeatAt = ref(0)
 const lastRemotePointerSentAt = ref(0)
 const sharedOutgoingStream = ref(null)
@@ -1866,11 +1867,16 @@ function syncSharedVideoUiFromState(sync = activeShare.value?.sync) {
     return
   }
 
-  sharedVideoUi.currentTime = shouldUseSyncedVideoUi()
+  const nextCurrentTime = shouldUseSyncedVideoUi()
     ? getVideoSyncTime(sync)
     : Number(sync.currentTime || 0)
+  sharedVideoUi.currentTime = !canGlobalControlShare.value && sharedVideoLocalPaused.value
+    ? Number(sharedVideoRef.value?.currentTime || sharedVideoUi.currentTime || 0)
+    : nextCurrentTime
   sharedVideoUi.duration = Number(sync.duration || 0)
-  sharedVideoUi.playing = Boolean(sync.playing)
+  sharedVideoUi.playing = !canGlobalControlShare.value && sharedVideoLocalPaused.value
+    ? false
+    : Boolean(sync.playing)
 }
 
 function restartSharedVideoUiTicker() {
@@ -1879,7 +1885,7 @@ function restartSharedVideoUiTicker() {
     sharedVideoUiTicker = null
   }
 
-  if (!shouldUseSyncedVideoUi() || !activeShare.value?.sync?.playing) {
+  if (!shouldUseSyncedVideoUi() || !activeShare.value?.sync?.playing || (!canGlobalControlShare.value && sharedVideoLocalPaused.value)) {
     return
   }
 
@@ -2512,6 +2518,7 @@ function clearActiveShare() {
   pendingStreamShareFile.value = null
   lastVideoHeartbeatAt.value = 0
   sharedVideoMuted.value = true
+  sharedVideoLocalPaused.value = false
   webpageLoaded.value = false
   clearIncomingTransfers()
 
@@ -4652,6 +4659,12 @@ function applyVideoSync(sync, forceSeek = false) {
     }
   }
 
+  if (!canGlobalControlShare.value && sharedVideoLocalPaused.value) {
+    video.pause()
+    restartSharedVideoUiTicker()
+    return
+  }
+
   if (sync.playing) {
     video.play().catch((error) => {
       console.error('同步播放失败:', error)
@@ -4662,6 +4675,7 @@ function applyVideoSync(sync, forceSeek = false) {
 
   restartSharedVideoUiTicker()
 }
+
 
 function handleSharedVideoLoaded() {
   if (sharedVideoRef.value && !shouldUseSyncedVideoUi()) {
@@ -4769,6 +4783,7 @@ function toggleSharedVideoPlayback() {
   }
 
   if (canGlobalControlShare.value) {
+    sharedVideoLocalPaused.value = false
     if (shouldUseSyncedVideoUi()) {
       const nextPlaying = !sharedVideoUi.playing
       sharedVideoUi.playing = nextPlaying
@@ -4800,10 +4815,12 @@ function toggleSharedVideoPlayback() {
   }
 
   if (sharedVideoRef.value.paused) {
+    sharedVideoLocalPaused.value = false
     const syncedTime = getVideoSyncTime(activeShare.value.sync)
     try {
       sharedVideoRef.value.currentTime = Math.min(syncedTime, sharedVideoRef.value.duration || syncedTime)
       sharedVideoUi.currentTime = syncedTime
+      sharedVideoUi.playing = true
     } catch (error) {
       console.error('恢复本地视频进度失败:', error)
     }
@@ -4814,6 +4831,8 @@ function toggleSharedVideoPlayback() {
     return
   }
 
+  sharedVideoLocalPaused.value = true
+  sharedVideoUi.playing = false
   sharedVideoRef.value.pause()
 }
 
@@ -5480,6 +5499,7 @@ onUnmounted(() => {
 
 .share-meta {
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .share-name {
@@ -5505,6 +5525,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
 }
 
 .video-controls-row {
@@ -5570,6 +5591,10 @@ onUnmounted(() => {
   flex: 1;
   min-width: 80px;
   accent-color: #60a5fa;
+}
+
+:fullscreen .share-meta {
+  width: min(960px, 100%);
 }
 
 :fullscreen .video-control-panel {

@@ -135,6 +135,33 @@ test('同 clientId 重连时，创建者会恢复超级管理员身份', async (
   assert.equal(restoredOwner?.isAdmin, true)
 })
 
+
+test('同 clientId 的并发标签页加入不会抢占已在线超级管理员身份', async (t) => {
+  const port = await getAvailablePort()
+  const server = await startServer(port)
+  t.after(async () => { await stopServer(server) })
+
+  const baseUrl = `http://127.0.0.1:${port}`
+  const owner = await connect(baseUrl)
+  const duplicateTab = await connect(baseUrl)
+  t.after(() => owner.close())
+  t.after(() => duplicateTab.close())
+
+  await joinRoom(owner, '900006', '创建者', 'shared-client')
+  const ownerSawJoin = onceWithTimeout(owner, 'participants-changed')
+  await joinRoom(duplicateTab, '900006', '成员A', 'shared-client')
+  await ownerSawJoin
+
+  const state = await readRoomState(baseUrl, '900006')
+  const ownerRole = state.participants.find((item) => item.id === owner.id)
+  const duplicateRole = state.participants.find((item) => item.id === duplicateTab.id)
+
+  assert.equal(ownerRole?.isSuperAdmin, true)
+  assert.equal(ownerRole?.isAdmin, true)
+  assert.equal(duplicateRole?.isSuperAdmin, false)
+  assert.equal(duplicateRole?.isAdmin, false)
+})
+
 test('只有超级管理员可以授予管理员，普通成员或普通管理员发起 grant-admin 不生效', async (t) => {
   const port = await getAvailablePort()
   const server = await startServer(port)
