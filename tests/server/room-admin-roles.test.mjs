@@ -24,6 +24,19 @@ async function readRoomState(baseUrl, roomId, userName = '观察者') {
   }
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function onceWithTimeout(socket, event, ms = 1500) {
+  return Promise.race([
+    once(socket, event),
+    wait(ms).then(() => {
+      throw new Error(`timed out waiting for ${event}`)
+    })
+  ])
+}
+
 test('创建者是超级管理员，授予管理员不会丢失自己的管理权限', async (t) => {
   const port = await getAvailablePort()
   const server = await startServer(port)
@@ -36,21 +49,21 @@ test('创建者是超级管理员，授予管理员不会丢失自己的管理�
   t.after(() => peer.close())
 
   const ownerState = await joinRoom(owner, '900001', '创建者', 'owner-client')
+  const ownerSawPeerJoin = onceWithTimeout(owner, 'participants-changed')
   await joinRoom(peer, '900001', '成员A', 'peer-client')
-  await once(owner, 'participants-changed')
+  await ownerSawPeerJoin
 
   assert.equal('adminSocketId' in ownerState, false)
   assert.equal(ownerState.participants.find((item) => item.name === '创建者')?.isSuperAdmin, true)
   assert.equal(ownerState.participants.find((item) => item.name === '创建者')?.isAdmin, true)
 
-  const participantsChangedPromise = once(owner, 'participants-changed')
   owner.emit('grant-admin', { roomId: '900001', targetId: peer.id })
 
-  const [participantsChanged] = await participantsChangedPromise
-  const ownerRole = participantsChanged.participants.find((item) => item.name === '创建者')
-  const peerRole = participantsChanged.participants.find((item) => item.name === '成员A')
+  const stateAfterGrant = await readRoomState(baseUrl, '900001')
+  const ownerRole = stateAfterGrant.participants.find((item) => item.name === '创建者')
+  const peerRole = stateAfterGrant.participants.find((item) => item.name === '成员A')
 
-  assert.equal('adminSocketId' in participantsChanged, false)
+  assert.equal('adminSocketId' in stateAfterGrant, false)
   assert.equal(ownerRole.isSuperAdmin, true)
   assert.equal(ownerRole.isAdmin, true)
   assert.equal(peerRole.isSuperAdmin, false)
@@ -69,13 +82,13 @@ test('同 clientId 重连时，创建者会恢复超级管理员身份', async (
   t.after(() => peer.close())
 
   await joinRoom(owner, '900002', '创建者', 'owner-client')
-  const ownerSawPeerJoin = once(owner, 'participants-changed')
-  const peerSawParticipantsChanged = once(peer, 'participants-changed')
+  const ownerSawPeerJoin = onceWithTimeout(owner, 'participants-changed')
+  const peerSawParticipantsChanged = onceWithTimeout(peer, 'participants-changed')
   await joinRoom(peer, '900002', '成员A', 'peer-client')
   await ownerSawPeerJoin
   await peerSawParticipantsChanged
 
-  const peerSawOwnerLeave = once(peer, 'participants-changed')
+  const peerSawOwnerLeave = onceWithTimeout(peer, 'participants-changed')
   owner.disconnect()
   const [leftState] = await peerSawOwnerLeave
   const ownerAfterLeft = leftState.participants.find((item) => item.name === '创建者')
@@ -108,10 +121,12 @@ test('只有超级管理员可以授予管理员，普通成员或普通管理�
   t.after(() => candidate.close())
 
   await joinRoom(owner, '900003', '创建者', 'owner-client')
+  const ownerSawMemberJoin = onceWithTimeout(owner, 'participants-changed')
   await joinRoom(member, '900003', '成员A', 'member-client')
-  await once(owner, 'participants-changed')
+  await ownerSawMemberJoin
+  const ownerSawCandidateJoin = onceWithTimeout(owner, 'participants-changed')
   await joinRoom(candidate, '900003', '成员B', 'candidate-client')
-  await once(owner, 'participants-changed')
+  await ownerSawCandidateJoin
 
   member.emit('grant-admin', { roomId: '900003', targetId: candidate.id })
   const afterMemberAttempt = await readRoomState(baseUrl, '900003')
@@ -141,14 +156,6 @@ test('只有超级管理员可以授予管理员，普通成员或普通管理�
 
 
 test('超级管理员离开但仍有管理员时房间继续', async (t) => {
-  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-  const onceWithTimeout = (socket, event, ms = 1500) => Promise.race([
-    once(socket, event),
-    wait(ms).then(() => {
-      throw new Error(`timed out waiting for ${event}`)
-    })
-  ])
-
   const port = await getAvailablePort()
   const server = await startServer(port)
   t.after(async () => { await stopServer(server) })
@@ -162,14 +169,21 @@ test('超级管理员离开但仍有管理员时房间继续', async (t) => {
   t.after(() => member.close())
 
   await joinRoom(owner, '900004', '创建者', 'owner-client')
+  const ownerSawAdminJoin = onceWithTimeout(owner, 'participants-changed')
+  const adminSawSelfJoin = onceWithTimeout(admin, 'participants-changed')
   await joinRoom(admin, '900004', '管理员A', 'admin-client')
-  await onceWithTimeout(owner, 'participants-changed')
+  await ownerSawAdminJoin
+  await adminSawSelfJoin
+  const ownerSawMemberJoin = onceWithTimeout(owner, 'participants-changed')
+  const adminSawMemberJoin = onceWithTimeout(admin, 'participants-changed')
   await joinRoom(member, '900004', '成员B', 'member-client')
-  await onceWithTimeout(owner, 'participants-changed')
+  await ownerSawMemberJoin
+  await adminSawMemberJoin
 
-  const adminGranted = onceWithTimeout(owner, 'participants-changed')
+  const adminSawGrant = onceWithTimeout(admin, 'participants-changed')
   owner.emit('grant-admin', { roomId: '900004', targetId: admin.id })
-  await adminGranted
+  const [grantedState] = await adminSawGrant
+  assert.equal(grantedState.participants.find((item) => item.name === '管理员A')?.isAdmin, true)
 
   const peerLeftPromise = onceWithTimeout(admin, 'peer-left')
   const participantsChangedPromise = onceWithTimeout(admin, 'participants-changed')
@@ -190,14 +204,6 @@ test('超级管理员离开但仍有管理员时房间继续', async (t) => {
 })
 
 test('最后一个管理员离开时房间关闭', async (t) => {
-  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-  const onceWithTimeout = (socket, event, ms = 1500) => Promise.race([
-    once(socket, event),
-    wait(ms).then(() => {
-      throw new Error(`timed out waiting for ${event}`)
-    })
-  ])
-
   const port = await getAvailablePort()
   const server = await startServer(port)
   t.after(async () => { await stopServer(server) })
@@ -211,18 +217,33 @@ test('最后一个管理员离开时房间关闭', async (t) => {
   t.after(() => member.close())
 
   await joinRoom(owner, '900005', '创建者', 'owner-client')
+  const ownerSawAdminJoin = onceWithTimeout(owner, 'participants-changed')
+  const adminSawSelfJoin = onceWithTimeout(admin, 'participants-changed')
   await joinRoom(admin, '900005', '管理员A', 'admin-client')
-  await onceWithTimeout(owner, 'participants-changed')
+  await ownerSawAdminJoin
+  await adminSawSelfJoin
+  const ownerSawMemberJoin = onceWithTimeout(owner, 'participants-changed')
+  const adminSawMemberJoin = onceWithTimeout(admin, 'participants-changed')
   await joinRoom(member, '900005', '成员B', 'member-client')
-  await onceWithTimeout(owner, 'participants-changed')
+  await ownerSawMemberJoin
+  await adminSawMemberJoin
 
-  const adminGranted = onceWithTimeout(owner, 'participants-changed')
+  const adminSawGrant = onceWithTimeout(admin, 'participants-changed')
   owner.emit('grant-admin', { roomId: '900005', targetId: admin.id })
-  await adminGranted
+  const [grantedState] = await adminSawGrant
+  assert.equal(grantedState.participants.find((item) => item.name === '管理员A')?.isAdmin, true)
 
+  const adminSawOwnerLeave = onceWithTimeout(admin, 'peer-left')
+  const adminSawParticipantsChanged = onceWithTimeout(admin, 'participants-changed')
+  const memberSawOwnerLeave = onceWithTimeout(member, 'peer-left')
   owner.emit('leave-room')
-  await onceWithTimeout(admin, 'peer-left')
-  await onceWithTimeout(admin, 'participants-changed')
+  await adminSawOwnerLeave
+  await adminSawParticipantsChanged
+  await memberSawOwnerLeave
+
+  let staleRoomEvent = false
+  admin.on('participants-changed', () => { staleRoomEvent = true })
+  admin.on('peer-joined', () => { staleRoomEvent = true })
 
   const memberSawAdminLeave = onceWithTimeout(member, 'peer-left')
   const roomClosed = onceWithTimeout(member, 'room-closed')
@@ -233,4 +254,10 @@ test('最后一个管理员离开时房间关闭', async (t) => {
 
   const [closedPayload] = await roomClosed
   assert.match(closedPayload.message, /房间已关闭|管理员.*离开/)
+
+  const replacementOwner = await connect(baseUrl)
+  t.after(() => replacementOwner.close())
+  await joinRoom(replacementOwner, '900005', '新创建者', 'replacement-owner-client')
+  await wait(200)
+  assert.equal(staleRoomEvent, false)
 })

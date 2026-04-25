@@ -846,6 +846,7 @@ const leaveCurrentRoom = (socket, options = {}) => {
   const room = rooms.get(roomId)
 
   if (!room) {
+    socket.leave(roomId)
     socketSessions.delete(socket.id)
     return
   }
@@ -881,6 +882,7 @@ const leaveCurrentRoom = (socket, options = {}) => {
       reason: 'last-admin-left',
       message: '最后一位管理员已离开，房间已关闭'
     })
+    socket.leave(roomId)
     rooms.delete(roomId)
     socketSessions.delete(socket.id)
     return
