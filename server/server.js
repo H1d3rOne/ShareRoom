@@ -749,6 +749,21 @@ const setSuperAdmin = (room, participant) => {
   return participant
 }
 
+const removeAdminRole = (room, socketId, clientId, options = {}) => {
+  const { clearSuperAdminClientId = false } = options
+
+  if (room.superAdminSocketId === socketId) {
+    room.superAdminSocketId = null
+    if (clearSuperAdminClientId && room.superAdminClientId === clientId) {
+      room.superAdminClientId = null
+    }
+  }
+
+  room.adminSocketIds.delete(socketId)
+}
+
+const hasAnyAdminLeft = (room) => Boolean(room.superAdminSocketId || room.adminSocketIds.size > 0)
+
 const setController = (room, participant, targetParticipant = null) => {
   room.controllerSocketId = participant?.id || null
   room.controllerTargetSocketId = participant ? (targetParticipant?.id || null) : null
@@ -840,7 +855,6 @@ const leaveCurrentRoom = (socket, options = {}) => {
   const wasController = room.controllerSocketId === socket.id
   const wasControllerTarget = room.controllerTargetSocketId === socket.id
   room.participants.delete(socket.id)
-  room.adminSocketIds.delete(socket.id)
 
   if (announce) {
     socket.to(roomId).emit('peer-left', {
@@ -858,20 +872,18 @@ const leaveCurrentRoom = (socket, options = {}) => {
     })
   }
 
-  if (wasSuperAdmin) {
-    if (releaseAdmin) {
-      io.to(roomId).emit('room-closed', {
-        reason: 'admin-left',
-        message: '管理员已关闭房间'
-      })
-      rooms.delete(roomId)
-      socketSessions.delete(socket.id)
-      return
-    } else if (room.superAdminClientId === clientId) {
-      room.superAdminSocketId = null
-    }
-  } else if (wasAdmin) {
-    room.adminSocketIds.delete(socket.id)
+  removeAdminRole(room, socket.id, clientId, {
+    clearSuperAdminClientId: releaseAdmin
+  })
+
+  if (releaseAdmin && (wasSuperAdmin || wasAdmin) && !hasAnyAdminLeft(room)) {
+    io.to(roomId).emit('room-closed', {
+      reason: 'last-admin-left',
+      message: '最后一位管理员已离开，房间已关闭'
+    })
+    rooms.delete(roomId)
+    socketSessions.delete(socket.id)
+    return
   }
 
   if (wasController || wasControllerTarget) {
