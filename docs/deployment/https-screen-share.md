@@ -26,14 +26,15 @@ sudo ./install.sh
 
 如果选择配置域名，脚本会：
 - 检测并安装 `nginx`
-- 若启用 HTTPS，检测并安装 `certbot` 与 `python3-certbot-nginx`
+- 若启用 HTTPS，检测并安装 `certbot`
 - 写入 `/etc/nginx/sites-available/<domain>`
 - 建立 `/etc/nginx/sites-enabled/<domain>` 软链
 - 若检测到站点配置已存在，会先提示并备份后再覆盖
-- 若检测到证书已存在，会直接复用；否则通过 `certbot --nginx -d <domain>` 申请证书
+- 若检测到证书已存在，会直接复用；否则脚本会先写入 HTTP 配置并开放 `/.well-known/acme-challenge/`，再通过 `certbot certonly --webroot -w /var/www/shareroom-certbot/<domain> -d <domain>` 申请证书
 - `nginx -t` 校验后 reload Nginx
 
 启用 HTTPS 后，Nginx 会固定通过 `443` 对外提供访问，再反向代理到你设置的应用服务端口。
+脚本会自动创建 ACME challenge 目录 `/var/www/shareroom-certbot/<domain>`，供 Let's Encrypt 校验使用。
 
 ## 一键启停脚本
 现在项目根目录还提供：
@@ -78,7 +79,14 @@ npm run serve
 server {
     listen 80;
     server_name room.thanhthao.us.ci;
-    return 301 https://$host$request_uri;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/shareroom-certbot/room.thanhthao.us.ci;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
 }
 
 server {
@@ -113,7 +121,7 @@ sudo systemctl reload nginx
 如果证书还未签发，再执行：
 
 ```bash
-sudo certbot --nginx -d room.thanhthao.us.ci
+sudo certbot certonly --webroot -w /var/www/shareroom-certbot/room.thanhthao.us.ci -d room.thanhthao.us.ci
 ```
 
 ## 验证是否成功
