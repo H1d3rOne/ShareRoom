@@ -148,6 +148,40 @@ certificates_exist() {
   [ -f "$(fullchain_path "$domain")" ] && [ -f "$(privkey_path "$domain")" ]
 }
 
+describe_nginx_site_status() {
+  local domain="$1"
+  local site_file
+  local site_link
+  site_file=$(site_file_path "$domain")
+  site_link=$(site_link_path "$domain")
+
+  if [ -f "$site_file" ]; then
+    if grep -q '^# BEGIN ShareRoom ' "$site_file" 2>/dev/null; then
+      print_warning "检测到 ShareRoom 站点配置已存在: $site_file，将在备份后覆盖更新"
+    else
+      print_warning "检测到站点配置已存在: $site_file，将在备份后按 ShareRoom 配置覆盖"
+    fi
+  else
+    print_success "未检测到现有站点配置，将创建: $site_file"
+  fi
+
+  if [ -L "$site_link" ] || [ -f "$site_link" ]; then
+    print_warning "检测到 Nginx 启用链接已存在: $site_link，将复用并更新"
+  else
+    print_success "未检测到 Nginx 启用链接，将创建: $site_link"
+  fi
+}
+
+describe_certificate_status() {
+  local domain="$1"
+
+  if certificates_exist "$domain"; then
+    print_success "检测到 HTTPS 证书已存在，将直接复用: $(fullchain_path "$domain")"
+  else
+    print_warning "未检测到 HTTPS 证书，后续将尝试执行 certbot --nginx -d $domain 申请证书"
+  fi
+}
+
 install_project_dependencies() {
   ensure_command node "错误: 未检测到 Node.js，请先安装 Node.js (>= 16.0.0)。下载地址: https://nodejs.org/"
   ensure_command npm "错误: 未检测到 npm，请先安装 npm"
@@ -362,6 +396,10 @@ configure_nginx() {
   local cert_ready="n"
 
   require_sudo_if_needed
+  describe_nginx_site_status "$domain"
+  if [ "$use_https" = "y" ]; then
+    describe_certificate_status "$domain"
+  fi
   backup_nginx_site "$domain"
 
   if [ "$use_https" = "y" ] && certificates_exist "$domain"; then

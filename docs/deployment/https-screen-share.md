@@ -29,8 +29,9 @@ sudo ./install.sh
 - 若启用 HTTPS，检测并安装 `certbot` 与 `python3-certbot-nginx`
 - 写入 `/etc/nginx/sites-available/<domain>`
 - 建立 `/etc/nginx/sites-enabled/<domain>` 软链
+- 若检测到站点配置已存在，会先提示并备份后再覆盖
+- 若检测到证书已存在，会直接复用；否则通过 `certbot --nginx -d <domain>` 申请证书
 - `nginx -t` 校验后 reload Nginx
-- 若启用 HTTPS，则通过 `certbot --nginx -d <domain>` 申请证书
 
 启用 HTTPS 后，Nginx 会固定通过 `443` 对外提供访问，再反向代理到你设置的应用服务端口。
 
