@@ -47,3 +47,6 @@ unpackage/
 .worktrees/
 .superpowers/
 .playwright-cli/
+
+# Local output artifacts
+output/
