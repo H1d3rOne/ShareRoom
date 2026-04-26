@@ -3144,8 +3144,13 @@ function startRealtimeVideoShare(file) {
 }
 
 async function startScreenShare() {
+  if (!window.isSecureContext) {
+    alert('当前页面不是安全上下文，请通过 https:// 域名访问后再使用屏幕共享')
+    return
+  }
+
   if (!navigator.mediaDevices?.getDisplayMedia) {
-    alert('当前浏览器不支持屏幕共享')
+    alert('当前浏览器或运行环境不支持网页屏幕共享，请使用最新版桌面 Chrome、Edge 或 Safari，并通过 HTTPS 访问')
     return
   }
 
@@ -3224,9 +3229,12 @@ async function startScreenShare() {
 
     pushSystemMessage('你开始了屏幕共享')
   } catch (error) {
-    if (error?.name !== 'NotAllowedError') {
-      console.error('屏幕共享启动失败:', error)
+    if (error?.name === 'NotAllowedError') {
+      alert('你已取消屏幕共享授权')
+      return
     }
+
+    console.error('屏幕共享启动失败:', error)
   }
 }
 

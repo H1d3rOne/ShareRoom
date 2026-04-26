@@ -1,5 +1,7 @@
 const express = require('express')
+const fs = require('fs')
 const http = require('http')
+const path = require('path')
 const { Server } = require('socket.io')
 
 const app = express()
@@ -13,6 +15,9 @@ const io = new Server(server, {
 
 const rooms = new Map()
 const socketSessions = new Map()
+const distPath = path.resolve(__dirname, '../dist')
+const distIndexPath = path.join(distPath, 'index.html')
+const hasDistBuild = fs.existsSync(distIndexPath)
 const GOMOKU_BOARD_SIZE = 15
 const LANDLORD_PLAYER_COUNT = 3
 const LANDLORD_BID_SCORES = new Set([0, 1, 2, 3])
@@ -1005,6 +1010,17 @@ const leaveCurrentRoom = (socket, options = {}) => {
 app.get('/health', (req, res) => {
   res.json({ ok: true })
 })
+
+app.all('/webpage-proxy', (req, res) => {
+  res.status(404).json({ error: 'webpage proxy removed' })
+})
+
+if (hasDistBuild) {
+  app.use(express.static(distPath))
+  app.get('/{*path}', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'))
+  })
+}
 
 io.on('connection', (socket) => {
   socketSessions.set(socket.id, {

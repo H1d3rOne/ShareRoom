@@ -5,13 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "node server/server.js",
+    "serve": "npm run build && npm run start",
     "server": "node server/server.js",
     "remote-agent": "python3 agent/remote_control_agent.py",
     "build": "vite build",
     "preview": "vite preview",
-    "start-all": "./start-all.sh",
+    "start-all": "./start.sh",
     "install-all": "./install.sh",
-    "test": "node --test tests/**/*.test.mjs"
+    "test": "node --test tests/**/*.test.mjs",
+    "stop-all": "./stop.sh"
   },
   "dependencies": {
     "express": "^5.2.1",
