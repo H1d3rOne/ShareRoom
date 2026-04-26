@@ -11,6 +11,7 @@ PROJECT_ROOT=$(cd "$(dirname "$0")" && pwd)
 NGINX_SITES_AVAILABLE_DIR="/etc/nginx/sites-available"
 NGINX_SITES_ENABLED_DIR="/etc/nginx/sites-enabled"
 CERTBOT_CERT_DIR="/etc/letsencrypt/live"
+ACME_WEBROOT_BASE="/var/www/shareroom-certbot"
 APP_PORT="3002"
 CONFIGURE_DOMAIN="n"
 USE_HTTPS="n"
@@ -143,6 +144,11 @@ privkey_path() {
   echo "$CERTBOT_CERT_DIR/$domain/privkey.pem"
 }
 
+acme_webroot_path() {
+  local domain="$1"
+  echo "$ACME_WEBROOT_BASE/$domain"
+}
+
 certificates_exist() {
   local domain="$1"
   [ -f "$(fullchain_path "$domain")" ] && [ -f "$(privkey_path "$domain")" ]
@@ -178,8 +184,37 @@ describe_certificate_status() {
   if certificates_exist "$domain"; then
     print_success "检测到 HTTPS 证书已存在，将直接复用: $(fullchain_path "$domain")"
   else
-    print_warning "未检测到 HTTPS 证书，后续将尝试执行 certbot --nginx -d $domain 申请证书"
+    print_warning "未检测到 HTTPS 证书，后续将尝试执行 certbot certonly --webroot -w $(acme_webroot_path "$domain") -d $domain 申请证书"
   fi
+}
+
+validate_existing_nginx_config() {
+  require_sudo_if_needed
+
+  if ! command -v nginx >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if $SUDO nginx -t >/dev/null 2>&1; then
+    print_success "现有 Nginx 全局配置校验通过"
+    return 0
+  fi
+
+  print_error "检测到现有 Nginx 全局配置无效，ShareRoom 不会覆盖你的 /etc/nginx/nginx.conf"
+  print_error "请先手动修复后再重试：sudo nginx -t"
+  print_warning "若报错类似 unknown directive \"http2\"，通常是 nginx.conf 中用了旧版本 Nginx 不支持的 'http2 on;' 写法"
+  print_warning "可改回 server 块里的 'listen 443 ssl http2;'，或升级 Nginx 后再重试"
+  exit 1
+}
+
+prepare_acme_webroot() {
+  local domain="$1"
+  local webroot
+  webroot=$(acme_webroot_path "$domain")
+
+  require_sudo_if_needed
+  $SUDO mkdir -p "$webroot"
+  $SUDO chmod 755 "$ACME_WEBROOT_BASE" "$webroot"
 }
 
 install_project_dependencies() {
@@ -228,6 +263,7 @@ install_nginx_stack() {
     print_success "Nginx 安装完成"
   else
     print_success "已检测到 Nginx，跳过安装"
+    validate_existing_nginx_config
   fi
 
   if [ "$USE_HTTPS" = "y" ]; then
@@ -235,7 +271,7 @@ install_nginx_stack() {
       echo ""
       echo -e "${YELLOW}[部署] 安装 certbot...${NC}"
       $SUDO apt-get update
-      $SUDO apt-get install -y certbot python3-certbot-nginx
+      $SUDO apt-get install -y certbot
       print_success "certbot 安装完成"
     else
       print_success "已检测到 certbot，跳过安装"
@@ -281,6 +317,8 @@ render_nginx_config() {
   local app_port="$2"
   local use_https="$3"
   local cert_ready="$4"
+  local webroot
+  webroot=$(acme_webroot_path "$domain")
 
   if [ "$use_https" = "y" ] && [ "$cert_ready" = "y" ]; then
     cat <<BLOCK
@@ -288,7 +326,14 @@ render_nginx_config() {
 server {
     listen 80;
     server_name $domain;
-    return 301 https://\$host\$request_uri;
+
+    location /.well-known/acme-challenge/ {
+        root $webroot;
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
 }
 
 server {
@@ -306,6 +351,11 @@ BLOCK
 server {
     listen 80;
     server_name $domain;
+
+    location /.well-known/acme-challenge/ {
+        root $webroot;
+    }
+
 $(render_proxy_location "$app_port")
 }
 # END ShareRoom $domain
@@ -368,6 +418,8 @@ reload_nginx_config() {
 
 request_https_certificate() {
   local domain="$1"
+  local webroot
+  webroot=$(acme_webroot_path "$domain")
 
   require_sudo_if_needed
   ensure_command certbot "错误: 未检测到 certbot，请先安装 certbot"
@@ -377,8 +429,9 @@ request_https_certificate() {
     return 0
   fi
 
-  print_warning "开始为 $domain 申请 HTTPS 证书（将调用 certbot --nginx -d $domain）..."
-  $SUDO certbot --nginx -d "$domain" || {
+  prepare_acme_webroot "$domain"
+  print_warning "开始为 $domain 申请 HTTPS 证书（将调用 certbot certonly --webroot -w $webroot -d $domain）..."
+  $SUDO certbot certonly --webroot -w "$webroot" -d "$domain" || {
     print_error "certbot 申请证书失败，请根据提示手动处理后重试"
     exit 1
   }
@@ -401,6 +454,7 @@ configure_nginx() {
     describe_certificate_status "$domain"
   fi
   backup_nginx_site "$domain"
+  prepare_acme_webroot "$domain"
 
   if [ "$use_https" = "y" ] && certificates_exist "$domain"; then
     cert_ready="y"
