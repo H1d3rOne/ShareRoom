@@ -43,8 +43,8 @@
           <div class="shared-overview-copy">
             <span class="section-kicker">Shared Stage</span>
             <div class="section-title-row">
-              <h2 class="section-title">
-                {{ showGameStage ? (activeGame ? '房内对局进行中' : '互动菜单已展开') : activeShare ? activeShare.fileName : '共享舞台待命中' }}
+              <h2 class="section-title" :title="getSharedOverviewTitle()">
+                {{ getSharedOverviewDisplayTitle() }}
               </h2>
               <span class="section-state">
                 {{ showGameStage ? (activeGame ? '实时同步' : '可发起邀请') : activeShare ? getShareKindLabel(activeShare.kind) : '等待共享' }}
@@ -660,22 +660,72 @@
               @timeupdate="handleSharedVideoTimeUpdate"
             ></video>
 
-            <div v-else-if="activeShare.kind === 'webpage'" class="webpage-share-container">
+            <div v-else-if="activeShare.kind === 'webpage'" ref="webpageShareContainerRef" class="webpage-share-container">
+              <div class="webpage-toolbar">
+                <button
+                  type="button"
+                  class="webpage-nav-btn"
+                  :disabled="!canStepBackwardSharedWebpage"
+                  title="后退"
+                  @click.stop="goBackSharedWebpage"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m15 18-6-6 6-6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="webpage-nav-btn"
+                  :disabled="!canStepForwardSharedWebpage"
+                  title="前进"
+                  @click.stop="goForwardSharedWebpage"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="webpage-nav-btn refresh"
+                  :disabled="!canRefreshSharedWebpage"
+                  title="刷新"
+                  @click.stop="refreshSharedWebpage"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M20 11a8 8 0 1 0 2 5.3" />
+                    <path d="M20 4v7h-7" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="webpage-nav-btn fullscreen"
+                  title="全屏"
+                  @click.stop="toggleSharedWebpageFullscreen"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <polyline points="15 3 21 3 21 9"/>
+                    <polyline points="9 21 3 21 3 15"/>
+                    <line x1="21" y1="3" x2="14" y2="10"/>
+                    <line x1="3" y1="21" x2="10" y2="14"/>
+                  </svg>
+                </button>
+              </div>
               <div v-if="!webpageLoaded" class="webpage-loading">
                 <div class="loader"></div>
                 <p>正在加载网页...</p>
               </div>
               <iframe
-                ref="webpageIframeRef"
-                :src="activeShare.url"
+                v-for="(entry, index) in getWebpageHistoryEntries(activeShare)"
+                :key="getWebpageIframeKey(activeShare, entry, index)"
+                :src="entry.url"
                 class="webpage-iframe"
-                :class="{ hidden: !webpageLoaded }"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-downloads"
+                :class="[index === getActiveWebpageHistoryIndex(activeShare) ? 'active' : 'inactive', { hidden: index === getActiveWebpageHistoryIndex(activeShare) && !webpageLoaded }]"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-downloads"
                 frameborder="0"
                 allowfullscreen
                 referrerpolicy="no-referrer"
-                @load="handleWebpageLoad"
-                @error="handleWebpageError"
+                @load="handleWebpageLoad(entry, index)"
+                @error="handleWebpageError(entry, index)"
               ></iframe>
             </div>
 
@@ -684,7 +734,7 @@
               <p>正在接收共享文件…</p>
             </div>
 
-            <div class="share-badge">{{ activeShare.ownerName }} 共享了{{ getShareKindLabel(activeShare.kind) }}</div>
+            <div class="share-badge" :title="getShareBadgeTitle(activeShare)">{{ getShareBadgeDisplayTitle(activeShare) }}</div>
 
             <div
               v-if="activeShare.kind === 'screen' && activeShare.pointer?.visible"
@@ -704,7 +754,14 @@
               <span class="remote-command-label">{{ remoteCommandOverlay.label }}</span>
             </div>
 
-            <div class="share-footer">
+            <div v-if="activeShare && canShare" class="share-close-drawer">
+              <button type="button" class="share-close-trigger" aria-label="展开关闭面板" @click.stop>
+                &lt;
+              </button>
+              <button type="button" class="share-close-btn" @click.stop="closeSharedMedia">关闭共享</button>
+            </div>
+
+            <div v-if="activeShare.kind !== 'webpage'" class="share-footer">
               <div class="share-meta">
                 <div class="share-name">{{ activeShare.fileName }}</div>
                 <div class="share-subtitle">
@@ -777,7 +834,6 @@
                 <button v-if="activeShare.kind === 'image' && canManageSharedMedia" class="ghost-btn" @click="toggleSharedImageZoom">
                   {{ activeShare.zoomed ? '还原' : '放大' }}
                 </button>
-                <button v-if="canShare" class="ghost-btn danger close-share-btn" @click="closeSharedMedia">关闭共享</button>
               </div>
             </div>
           </template>
@@ -881,6 +937,13 @@
                   @click="grantAdminTo(peer)"
                 >
                   授予管理员
+                </button>
+                <button
+                  v-else-if="canGrantAdmin && !peer.isSuperAdmin && peer.isAdmin && peer.id !== selfId"
+                  class="tiny-btn admin-transfer-btn danger"
+                  @click="revokeAdminFrom(peer)"
+                >
+                  撤销管理员
                 </button>
                 <button
                   v-if="canManagePeerRemoteControl(peer)"
@@ -1054,10 +1117,12 @@ const suppressShareEventsUntil = ref(0)
 
 const showWebpageDialog = ref(false)
 const webpageUrlInput = ref('')
-const webpageIframeRef = ref(null)
+const webpageShareContainerRef = ref(null)
 const webpageUrlInputRef = ref(null)
 const webpageLoaded = ref(false)
+const webpageIframeLoadState = reactive({})
 const sharedVideoMuted = ref(true)
+const sharedVideoHasLocalMuteOverride = ref(false)
 const sharedVideoLocalPaused = ref(false)
 const lastVideoHeartbeatAt = ref(0)
 const lastRemotePointerSentAt = ref(0)
@@ -1150,6 +1215,10 @@ const isShareOwner = computed(() => activeShare.value?.ownerId === selfId.value)
 const canShare = computed(() => isConnected.value && isAdmin.value)
 const canOpenGameMenu = computed(() => isConnected.value && isAdmin.value)
 const canGlobalControlShare = computed(() => isConnected.value && isAdmin.value)
+const canControlSharedWebpage = computed(() => Boolean(activeShare.value?.kind === 'webpage' && isConnected.value))
+const canRefreshSharedWebpage = computed(() => Boolean(canControlSharedWebpage.value && activeShare.value?.url))
+const canStepBackwardSharedWebpage = computed(() => canControlSharedWebpage.value && getWebpageHistoryEntries(activeShare.value).length > 1)
+const canStepForwardSharedWebpage = computed(() => canControlSharedWebpage.value && getWebpageHistoryEntries(activeShare.value).length > 1)
 const canLocalControlSharedVideo = computed(() => Boolean(activeShare.value && activeShare.value.kind === 'video' && isConnected.value))
 const canControlShare = computed(() => isConnected.value && (isShareOwner.value || isRemoteController.value))
 const canManageSharedMedia = computed(() => isConnected.value && (canControlShare.value || isAdmin.value))
@@ -1643,6 +1712,9 @@ function resolveSignalServerUrl() {
   if (import.meta.env.VITE_SIGNAL_SERVER_URL) {
     return import.meta.env.VITE_SIGNAL_SERVER_URL
   }
+  if (window.location.port === '3001') {
+    return window.location.origin
+  }
   const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
   return `${protocol}//${window.location.hostname}:3002`
 }
@@ -1670,6 +1742,15 @@ function rememberAdminRoom(targetRoomId) {
     sessionStorage.setItem('shareroom-admin-rooms', JSON.stringify([...rooms]))
   } catch (error) {
     console.error('保存管理员房间失败:', error)
+  }
+}
+
+function forgetAdminRoom(targetRoomId) {
+  try {
+    const rooms = getRememberedAdminRooms().filter((item) => item !== targetRoomId)
+    sessionStorage.setItem('shareroom-admin-rooms', JSON.stringify(rooms))
+  } catch (error) {
+    console.error('移除管理员房间失败:', error)
   }
 }
 
@@ -1794,6 +1875,48 @@ function getSharedVideoSource(share = activeShare.value) {
   return share.url || undefined
 }
 
+function getShareBadgeTitle(share = activeShare.value) {
+  if (!share) {
+    return ''
+  }
+
+  const fileName = typeof share?.fileName === 'string' ? share.fileName.trim() : ''
+  const ownerName = share?.ownerName || '管理员'
+  const kindLabel = getShareKindLabel(share?.kind)
+
+  return fileName ? `${ownerName} 共享了${kindLabel}：${fileName}` : `${ownerName} 共享了${kindLabel}`
+}
+
+function truncateTextWithEllipsis(text, maxLength) {
+  const glyphs = Array.from(String(text || ''))
+  if (!Number.isFinite(maxLength) || maxLength < 1 || glyphs.length <= maxLength) {
+    return glyphs.join('')
+  }
+
+  return glyphs.slice(0, maxLength).join('') + '...'
+}
+
+function getSharedOverviewTitle() {
+  if (showGameStage.value) {
+    return activeGame.value ? '房内对局进行中' : '互动菜单已展开'
+  }
+
+  if (activeShare.value?.fileName) {
+    return activeShare.value.fileName
+  }
+
+  return '共享舞台待命中'
+}
+
+function getSharedOverviewDisplayTitle() {
+  return truncateTextWithEllipsis(getSharedOverviewTitle(), 24)
+}
+
+function getShareBadgeDisplayTitle(share = activeShare.value) {
+  const maxLength = share?.kind === 'webpage' ? 24 : 20
+  return truncateTextWithEllipsis(getShareBadgeTitle(share), maxLength)
+}
+
 function shouldMuteSharedVideo(share = activeShare.value) {
   if (!share || !isVideoLikeShare(share)) {
     return true
@@ -1803,6 +1926,9 @@ function shouldMuteSharedVideo(share = activeShare.value) {
 
 function toggleSharedVideoMute() {
   sharedVideoMuted.value = !sharedVideoMuted.value
+  if (!canGlobalControlShare.value) {
+    sharedVideoHasLocalMuteOverride.value = true
+  }
   sharedVideoUi.muted = sharedVideoMuted.value
   if (sharedVideoRef.value) {
     sharedVideoRef.value.muted = sharedVideoMuted.value
@@ -1826,6 +1952,21 @@ function toggleSharedVideoFullscreen() {
     document.exitFullscreen()
   } else {
     stage.requestFullscreen().catch(() => {
+      pushSystemMessage('全屏模式不可用')
+    })
+  }
+}
+
+function toggleSharedWebpageFullscreen() {
+  const container = webpageShareContainerRef.value || sharedStageRef.value
+  if (!container) {
+    return
+  }
+
+  if (document.fullscreenElement) {
+    document.exitFullscreen()
+  } else {
+    container.requestFullscreen().catch(() => {
       pushSystemMessage('全屏模式不可用')
     })
   }
@@ -1871,12 +2012,33 @@ function pushSystemMessage(content) {
   })
 }
 
+function getResolvedSharedVideoDuration(sync = activeShare.value?.sync) {
+  const syncedDuration = Number(sync?.duration)
+  if (Number.isFinite(syncedDuration) && syncedDuration > 0) {
+    return syncedDuration
+  }
+
+  const elementDuration = Number(sharedVideoRef.value?.duration)
+  if (Number.isFinite(elementDuration) && elementDuration > 0) {
+    return elementDuration
+  }
+
+  const sharedDuration = Number(activeShare.value?.duration)
+  if (Number.isFinite(sharedDuration) && sharedDuration > 0) {
+    return sharedDuration
+  }
+
+  return 0
+}
+
 function syncSharedVideoUiFromState(sync = activeShare.value?.sync) {
   if (!sync) {
     sharedVideoUi.currentTime = 0
     sharedVideoUi.duration = 0
     sharedVideoUi.playing = false
     sharedVideoUi.muted = true
+    sharedVideoMuted.value = true
+    sharedVideoHasLocalMuteOverride.value = false
     return
   }
 
@@ -1886,12 +2048,15 @@ function syncSharedVideoUiFromState(sync = activeShare.value?.sync) {
   sharedVideoUi.currentTime = !canGlobalControlShare.value && sharedVideoLocalPaused.value
     ? Number(sharedVideoRef.value?.currentTime || sharedVideoUi.currentTime || 0)
     : nextCurrentTime
-  sharedVideoUi.duration = Number(sync.duration || 0)
+  sharedVideoUi.duration = getResolvedSharedVideoDuration(sync)
   sharedVideoUi.playing = !canGlobalControlShare.value && sharedVideoLocalPaused.value
     ? false
     : Boolean(sync.playing)
-  sharedVideoUi.muted = Boolean(sync.muted ?? true)
-  sharedVideoMuted.value = sharedVideoUi.muted
+  const syncedMuted = Boolean(sync.muted ?? true)
+  if (canGlobalControlShare.value || !sharedVideoHasLocalMuteOverride.value) {
+    sharedVideoMuted.value = syncedMuted
+  }
+  sharedVideoUi.muted = canGlobalControlShare.value ? syncedMuted : sharedVideoMuted.value
   if (sharedVideoRef.value) {
     sharedVideoRef.value.muted = sharedVideoMuted.value
   }
@@ -2498,6 +2663,11 @@ function updateActiveShare(patch) {
   } else {
     syncSharedVideoUiFromState(null)
   }
+  if (nextShare.kind === 'webpage') {
+    syncActiveWebpageLoadedState(nextShare)
+  } else {
+    webpageLoaded.value = false
+  }
   restartSharedVideoUiTicker()
 }
 
@@ -2536,9 +2706,13 @@ function clearActiveShare() {
   pendingStreamShareFile.value = null
   lastVideoHeartbeatAt.value = 0
   sharedVideoMuted.value = true
+  sharedVideoHasLocalMuteOverride.value = false
   sharedVideoLocalPaused.value = false
   sharedVideoUi.muted = true
   webpageLoaded.value = false
+  Object.keys(webpageIframeLoadState).forEach((key) => {
+    delete webpageIframeLoadState[key]
+  })
   clearIncomingTransfers()
 
   Object.keys(outboundDeliveries).forEach((key) => {
@@ -2561,6 +2735,10 @@ function openIncomingShare(media) {
     fileSize: media.fileSize,
     ownerId: media.ownerId,
     ownerName: media.ownerName,
+    url: media.url || '',
+    webpageReloadToken: Number(media.reloadToken || 0) || undefined,
+    webpageHistory: media.webpageHistory || undefined,
+    webpageActiveIndex: Number(media.webpageActiveIndex || 0),
     zoomed: Boolean(media.zoomed),
     deliveryMode: media.deliveryMode || 'file',
     streamId: media.streamId || null,
@@ -3680,8 +3858,15 @@ function removeParticipant(peerId) {
 }
 
 function upsertParticipant(peer) {
+  const existing = participants.value.find((item) => item.id === peer.id)
   const next = participants.value.filter((item) => item.id !== peer.id)
-  next.push(peer)
+  next.push({
+    ...existing,
+    ...peer,
+    isAdmin: Boolean(existing?.isAdmin || peer.isAdmin),
+    isSuperAdmin: Boolean(existing?.isSuperAdmin || peer.isSuperAdmin),
+    isController: Boolean(existing?.isController || peer.isController)
+  })
   updateParticipants(next)
 }
 
@@ -3819,6 +4004,11 @@ function connectSocket() {
 
   socket.value.on('participants-changed', ({ participants: nextParticipants }) => {
     updateParticipants(nextParticipants || [])
+
+    if ((nextParticipants || []).some((peer) => peer.id === selfId.value && peer.isAdmin)) {
+      requestedAdmin.value = true
+      rememberAdminRoom(roomId.value)
+    }
   })
 
   socket.value.on('peer-joined', ({ peer }) => {
@@ -4062,13 +4252,22 @@ function connectSocket() {
     pushSystemMessage(`${payload.grantedByName} 已授予 ${payload.targetName} 管理员权限`)
   })
 
+  socket.value.on('admin-revoked', (payload) => {
+    if (payload.targetId === selfId.value) {
+      requestedAdmin.value = false
+      forgetAdminRoom(roomId.value)
+    }
+    pushSystemMessage(`${payload.revokedByName} 已撤销 ${payload.targetName} 的管理员权限`)
+  })
+
   socket.value.on('webpage-share', (payload) => {
     if (payload.ownerId === selfId.value) {
       return
     }
 
-    closeSharedMedia()
     webpageLoaded.value = false
+
+    closeSharedMedia()
 
     updateActiveShare({
       id: payload.mediaId,
@@ -4079,6 +4278,9 @@ function connectSocket() {
       ownerId: payload.ownerId,
       ownerName: payload.ownerName,
       url: payload.url,
+      webpageReloadToken: Number(payload.reloadToken || Date.now()),
+      webpageHistory: payload.webpageHistory || undefined,
+      webpageActiveIndex: Number(payload.webpageActiveIndex || 0),
       progress: 100
     })
 
@@ -4129,6 +4331,166 @@ function closeWebpageShareDialog() {
   webpageUrlInput.value = ''
 }
 
+function getWebpageShareFileName(url) {
+  try {
+    const urlObj = new URL(url)
+    return `${urlObj.hostname}${urlObj.pathname}${urlObj.search}` || urlObj.hostname
+  } catch {
+    return url
+  }
+}
+
+const MAX_WEBPAGE_HISTORY = 5
+
+function createWebpageHistoryEntry(url, fileName = getWebpageShareFileName(url), reloadToken = Date.now()) {
+  return {
+    id: createId('webpage_entry_'),
+    url,
+    fileName,
+    reloadToken: Number(reloadToken || Date.now())
+  }
+}
+
+function getWebpageHistoryEntries(share = activeShare.value) {
+  if (!share || share.kind !== 'webpage') {
+    return []
+  }
+
+  const sourceEntries = Array.isArray(share.webpageHistory) && share.webpageHistory.length
+    ? share.webpageHistory
+    : (share.url ? [createWebpageHistoryEntry(share.url, share.fileName, share.webpageReloadToken)] : [])
+
+  return sourceEntries
+    .map((entry) => {
+      const url = typeof entry?.url === 'string' ? entry.url.trim() : ''
+      if (!url) {
+        return null
+      }
+
+      return {
+        id: entry?.id || createId('webpage_entry_'),
+        url,
+        fileName: entry?.fileName || getWebpageShareFileName(url),
+        reloadToken: Number(entry?.reloadToken || Date.now())
+      }
+    })
+    .filter(Boolean)
+    .slice(-MAX_WEBPAGE_HISTORY)
+}
+
+function getActiveWebpageHistoryIndex(share = activeShare.value) {
+  const entries = getWebpageHistoryEntries(share)
+  if (!entries.length) {
+    return -1
+  }
+
+  return Math.min(Math.max(Number(share?.webpageActiveIndex || 0), 0), entries.length - 1)
+}
+
+function getActiveWebpageHistoryEntry(share = activeShare.value) {
+  const entries = getWebpageHistoryEntries(share)
+  const activeIndex = getActiveWebpageHistoryIndex(share)
+  return activeIndex >= 0 ? entries[activeIndex] : null
+}
+
+function getWebpageIframeKey(share = activeShare.value, entry = getActiveWebpageHistoryEntry(share), index = getActiveWebpageHistoryIndex(share)) {
+  const shareId = share?.id || 'webpage'
+  const entryId = entry?.id || `entry_${index}`
+  const reloadToken = Number(entry?.reloadToken || share?.webpageReloadToken || 0)
+  return `${shareId}:${entryId}:${reloadToken}`
+}
+
+function syncActiveWebpageLoadedState(share = activeShare.value) {
+  const activeEntry = getActiveWebpageHistoryEntry(share)
+  if (!activeEntry) {
+    webpageLoaded.value = false
+    return
+  }
+
+  webpageLoaded.value = Boolean(webpageIframeLoadState[getWebpageIframeKey(share, activeEntry)])
+}
+
+function commitSharedWebpageState(entries, activeIndex, options = {}) {
+  const trimmedEntries = entries.slice(-MAX_WEBPAGE_HISTORY)
+  const droppedCount = Math.max(entries.length - trimmedEntries.length, 0)
+  const normalizedActiveIndex = Math.min(
+    Math.max(activeIndex - droppedCount, 0),
+    Math.max(trimmedEntries.length - 1, 0)
+  )
+  const activeEntry = trimmedEntries[normalizedActiveIndex]
+  if (!activeEntry) {
+    return
+  }
+
+  const shareId = options.mediaId || activeShare.value?.id || `webpage-${Date.now()}`
+  const ownerId = options.ownerId || activeShare.value?.ownerId || selfId.value
+  const ownerName = options.ownerName || activeShare.value?.ownerName || displayName.value
+  const shouldBroadcast = options.broadcast ?? canGlobalControlShare.value
+
+  updateActiveShare({
+    id: shareId,
+    kind: 'webpage',
+    fileName: activeEntry.fileName,
+    fileType: 'webpage',
+    fileSize: 0,
+    ownerId,
+    ownerName,
+    url: activeEntry.url,
+    webpageReloadToken: activeEntry.reloadToken,
+    webpageHistory: trimmedEntries,
+    webpageActiveIndex: normalizedActiveIndex,
+    progress: 100
+  })
+
+  if (shouldBroadcast && socket.value?.connected) {
+    socket.value.emit('webpage-share', {
+      roomId: roomId.value,
+      mediaId: shareId,
+      ownerId,
+      ownerName,
+      url: activeEntry.url,
+      fileName: activeEntry.fileName,
+      reloadToken: activeEntry.reloadToken,
+      webpageHistory: trimmedEntries,
+      webpageActiveIndex: normalizedActiveIndex
+    })
+  }
+}
+
+function goBackSharedWebpage() {
+  if (!canStepBackwardSharedWebpage.value) {
+    return
+  }
+
+  const entries = getWebpageHistoryEntries(activeShare.value)
+  const activeIndex = getActiveWebpageHistoryIndex(activeShare.value)
+  const nextIndex = activeIndex <= 0 ? entries.length - 1 : activeIndex - 1
+  commitSharedWebpageState(entries, nextIndex)
+}
+
+function goForwardSharedWebpage() {
+  if (!canStepForwardSharedWebpage.value) {
+    return
+  }
+
+  const entries = getWebpageHistoryEntries(activeShare.value)
+  const activeIndex = getActiveWebpageHistoryIndex(activeShare.value)
+  const nextIndex = activeIndex >= entries.length - 1 ? 0 : activeIndex + 1
+  commitSharedWebpageState(entries, nextIndex)
+}
+
+function refreshSharedWebpage() {
+  if (!canRefreshSharedWebpage.value) {
+    return
+  }
+
+  webpageLoaded.value = false
+  const entries = getWebpageHistoryEntries(activeShare.value)
+  const activeIndex = getActiveWebpageHistoryIndex(activeShare.value)
+  const nextEntries = entries.map((entry, index) => index === activeIndex ? { ...entry, reloadToken: Date.now() } : entry)
+  commitSharedWebpageState(nextEntries, activeIndex)
+}
+
 function confirmWebpageShare() {
   const url = webpageUrlInput.value.trim()
   if (!isValidWebpageUrl.value) {
@@ -4136,42 +4498,41 @@ function confirmWebpageShare() {
     return
   }
 
-  closeSharedMedia()
+  const fileName = getWebpageShareFileName(url)
+  const reloadToken = Date.now()
+  const historyEntry = createWebpageHistoryEntry(url, fileName, reloadToken)
+  const reusingWebpageShare = activeShare.value?.kind === 'webpage'
+  const shareId = reusingWebpageShare ? activeShare.value.id : `webpage-${Date.now()}`
+  let entries = []
+
+  if (!reusingWebpageShare) {
+    closeSharedMedia()
+    entries = [historyEntry]
+  } else {
+    entries = [...getWebpageHistoryEntries(activeShare.value), historyEntry]
+  }
+
   webpageLoaded.value = false
-
-  const shareId = `webpage-${Date.now()}`
-  const urlObj = new URL(url)
-  const fileName = urlObj.hostname + urlObj.pathname
-
-  updateActiveShare({
-    id: shareId,
-    kind: 'webpage',
-    fileName: fileName,
-    fileType: 'webpage',
-    fileSize: 0,
-    ownerId: selfId.value,
-    ownerName: displayName.value,
-    url: url,
-    progress: 100
-  })
-
-  socket.value.emit('webpage-share', {
-    roomId: roomId.value,
-    mediaId: shareId,
-    url: url,
-    fileName: fileName
-  })
+  commitSharedWebpageState(entries, entries.length - 1, { mediaId: shareId })
 
   closeWebpageShareDialog()
   pushSystemMessage(`开始共享网页: ${fileName}`)
 }
 
-function handleWebpageLoad() {
-  webpageLoaded.value = true
+function handleWebpageLoad(entry, index) {
+  const key = getWebpageIframeKey(activeShare.value, entry, index)
+  webpageIframeLoadState[key] = true
+  if (index === getActiveWebpageHistoryIndex(activeShare.value)) {
+    webpageLoaded.value = true
+  }
 }
 
-function handleWebpageError() {
-  webpageLoaded.value = true
+function handleWebpageError(entry, index) {
+  const key = getWebpageIframeKey(activeShare.value, entry, index)
+  webpageIframeLoadState[key] = true
+  if (index === getActiveWebpageHistoryIndex(activeShare.value)) {
+    webpageLoaded.value = true
+  }
   pushSystemMessage('网页加载失败，该网站可能禁止在iframe中嵌入')
 }
 
@@ -4213,11 +4574,6 @@ function handleFileChange(event) {
 
   if (!file.size) {
     alert('文件为空，无法共享')
-    return
-  }
-
-  if (kind === 'video' && supportsStreamVideoShare()) {
-    startRealtimeVideoShare(file)
     return
   }
 
@@ -4678,18 +5034,18 @@ function applyVideoSync(sync, forceSeek = false) {
   })
   suppressShareEvents(sync.playing ? 1200 : 700)
 
+  if (!canGlobalControlShare.value && sharedVideoLocalPaused.value) {
+    video.pause()
+    restartSharedVideoUiTicker()
+    return
+  }
+
   if (!shouldUseSyncedVideoUi() && Number.isFinite(targetTime) && (forceSeek || Math.abs(video.currentTime - targetTime) > 0.45)) {
     try {
       video.currentTime = Math.min(targetTime, video.duration || targetTime)
     } catch (error) {
       console.error('同步播放位置失败:', error)
     }
-  }
-
-  if (!canGlobalControlShare.value && sharedVideoLocalPaused.value) {
-    video.pause()
-    restartSharedVideoUiTicker()
-    return
   }
 
   if (sync.playing) {
@@ -4706,7 +5062,7 @@ function applyVideoSync(sync, forceSeek = false) {
 
 function handleSharedVideoLoaded() {
   if (sharedVideoRef.value && !shouldUseSyncedVideoUi()) {
-    sharedVideoUi.duration = Number(sharedVideoRef.value.duration || activeShare.value?.sync?.duration || 0)
+    sharedVideoUi.duration = getResolvedSharedVideoDuration(activeShare.value?.sync)
     sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
     sharedVideoUi.playing = Boolean(!sharedVideoRef.value.paused && !sharedVideoRef.value.ended)
   }
@@ -4718,7 +5074,7 @@ function handleSharedVideoLoaded() {
 
 function handleSharedVideoCanPlay() {
   if (sharedVideoRef.value && !shouldUseSyncedVideoUi()) {
-    sharedVideoUi.duration = Number(sharedVideoRef.value.duration || activeShare.value?.sync?.duration || 0)
+    sharedVideoUi.duration = getResolvedSharedVideoDuration(activeShare.value?.sync)
     sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
     sharedVideoUi.playing = Boolean(!sharedVideoRef.value.paused && !sharedVideoRef.value.ended)
   }
@@ -4998,6 +5354,18 @@ function grantAdminTo(peer) {
   })
 }
 
+function revokeAdminFrom(peer) {
+  if (!canGrantAdmin.value || !socket.value?.connected) return
+
+  const confirmed = confirm(`确定撤销 ${peer.name} 的管理员权限吗？`)
+  if (!confirmed) return
+
+  socket.value.emit('revoke-admin', {
+    roomId: roomId.value,
+    targetId: peer.id
+  })
+}
+
 watch(localMediaStream, async () => {
   await nextTick()
   syncLocalVideo()
@@ -5040,7 +5408,6 @@ watch(
 )
 
 onMounted(() => {
-  checkRemoteControlAgent({ quiet: true })
   connectSocket()
 })
 
@@ -5426,16 +5793,82 @@ onUnmounted(() => {
   position: relative;
 }
 
+.webpage-toolbar {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 999px;
+  background: rgba(8, 15, 28, 0.72);
+  border: 1px solid rgba(167, 185, 210, 0.2);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.22);
+}
+
+.webpage-nav-btn {
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, opacity 0.18s ease;
+}
+
+.webpage-nav-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.webpage-nav-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: rgba(96, 165, 250, 0.22);
+}
+
+.webpage-nav-btn.refresh:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.22);
+}
+
+.webpage-nav-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .webpage-iframe {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   border: none;
   border-radius: 12px;
 }
 
+.webpage-iframe.active {
+  z-index: 2;
+}
+
+.webpage-iframe.inactive {
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
 .webpage-iframe.hidden {
   visibility: hidden;
-  position: absolute;
 }
 
 .webpage-loading {
@@ -5468,6 +5901,7 @@ onUnmounted(() => {
   position: absolute;
   top: 18px;
   left: 18px;
+  max-width: calc(100% - 36px);
   background: rgba(8, 15, 28, 0.82);
   color: #f8fbff;
   padding: 9px 13px;
@@ -5475,6 +5909,10 @@ onUnmounted(() => {
   font-size: 13px;
   border: 1px solid rgba(167, 185, 210, 0.12);
   backdrop-filter: blur(12px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
 }
 
 .remote-pointer {
@@ -5679,6 +6117,68 @@ onUnmounted(() => {
   gap: clamp(10px, 1vw, 14px);
 }
 
+.share-close-drawer {
+  position: absolute;
+  bottom: 18px;
+  right: 0;
+  z-index: 5;
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0;
+  transform: translateX(calc(100% - 32px));
+  transition: transform 0.22s ease;
+  filter: drop-shadow(0 14px 30px rgba(2, 6, 23, 0.32));
+}
+
+.share-close-drawer:hover,
+.share-close-drawer:focus-within {
+  transform: translateX(0);
+}
+
+.share-close-trigger,
+.share-close-btn {
+  border: none;
+  color: #f8fafc;
+  cursor: pointer;
+}
+
+.share-close-trigger {
+  width: 32px;
+  min-height: 44px;
+  border-radius: 16px 0 0 16px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(167, 185, 210, 0.14);
+  border-right: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.share-close-btn {
+  min-height: 44px;
+  padding: 0 14px;
+  white-space: nowrap;
+  border-radius: 0 16px 16px 0;
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.92), rgba(239, 68, 68, 0.88));
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.share-close-trigger:hover,
+.share-close-btn:hover {
+  filter: brightness(1.06);
+}
+
+.share-close-trigger:focus-visible,
+.share-close-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.24);
+}
+
 .ghost-btn {
   min-height: clamp(38px, 4vw, 48px);
   border: 1px solid rgba(167, 185, 210, 0.14);
@@ -5686,10 +6186,6 @@ onUnmounted(() => {
   color: #f8fafc;
   border-radius: 14px;
   padding: 0 clamp(12px, 1.6vw, 18px);
-}
-
-.close-share-btn {
-  white-space: nowrap;
 }
 
 .ghost-btn.danger {

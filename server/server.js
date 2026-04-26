@@ -684,6 +684,7 @@ const getRoom = (roomId) => {
       superAdminSocketId: null,
       superAdminClientId: null,
       adminSocketIds: new Set(),
+      adminClientIds: new Set(),
       controllerSocketId: null,
       controllerTargetSocketId: null,
       gameInvite: null,
@@ -722,6 +723,25 @@ const serializeRoom = (room, viewerId = '') => ({
   gameState: serializeGameState(room.gameState, viewerId)
 })
 
+const normalizeWebpageHistoryEntries = (entries = []) => (
+  (Array.isArray(entries) ? entries : [])
+    .map((entry) => {
+      const url = `${entry?.url || ''}`.trim()
+      if (!url) {
+        return null
+      }
+
+      return {
+        id: `${entry?.id || `webpage_entry_${Date.now()}`}` ,
+        url,
+        fileName: `${entry?.fileName || url}`.trim() || url,
+        reloadToken: Number(entry?.reloadToken || Date.now())
+      }
+    })
+    .filter(Boolean)
+    .slice(-5)
+)
+
 const broadcastParticipants = (roomId, room) => {
   io.to(roomId).emit('participants-changed', {
     participants: serializeParticipants(room),
@@ -749,8 +769,20 @@ const setSuperAdmin = (room, participant) => {
   return participant
 }
 
+const setAdminRole = (room, participant) => {
+  if (!participant) {
+    return null
+  }
+
+  room.adminSocketIds.add(participant.id)
+  if (participant.clientId) {
+    room.adminClientIds.add(participant.clientId)
+  }
+  return participant
+}
+
 const removeAdminRole = (room, socketId, clientId, options = {}) => {
-  const { clearSuperAdminClientId = false } = options
+  const { clearSuperAdminClientId = false, clearAdminClientId = false } = options
 
   if (room.superAdminSocketId === socketId) {
     room.superAdminSocketId = null
@@ -760,6 +792,9 @@ const removeAdminRole = (room, socketId, clientId, options = {}) => {
   }
 
   room.adminSocketIds.delete(socketId)
+  if (clearAdminClientId && clientId) {
+    room.adminClientIds.delete(clientId)
+  }
 }
 
 const hasAnyAdminLeft = (room) => Boolean(room.superAdminSocketId || room.adminSocketIds.size > 0)
@@ -874,7 +909,8 @@ const leaveCurrentRoom = (socket, options = {}) => {
   }
 
   removeAdminRole(room, socket.id, clientId, {
-    clearSuperAdminClientId: releaseAdmin
+    clearSuperAdminClientId: releaseAdmin,
+    clearAdminClientId: releaseAdmin
   })
 
   if (releaseAdmin && (wasSuperAdmin || wasAdmin) && !hasAnyAdminLeft(room)) {
@@ -1006,6 +1042,15 @@ io.on('connection', (socket) => {
     if (room.superAdminClientId && room.superAdminClientId === clientId && !hasActiveSuperAdmin) {
       setSuperAdmin(room, participant)
       adminChanged = true
+    } else if (
+      room.adminClientIds.has(clientId)
+      && !Array.from(room.participants.values()).some((peer) => (
+        peer.id !== socket.id
+        && peer.clientId === clientId
+        && isAdminSocket(room, peer.id)
+      ))
+    ) {
+      setAdminRole(room, participant)
     } else if (!room.superAdminSocketId && !room.superAdminClientId) {
       setSuperAdmin(room, participant)
       adminChanged = true
@@ -1069,8 +1114,8 @@ io.on('connection', (socket) => {
       return
     }
 
-    room.adminSocketIds.add(socket.id)
-    room.adminSocketIds.add(targetParticipant.id)
+    setAdminRole(room, room.participants.get(socket.id) || targetParticipant)
+    setAdminRole(room, targetParticipant)
     broadcastParticipants(session.roomId, room)
 
     io.to(session.roomId).emit('admin-granted', {
@@ -1081,34 +1126,117 @@ io.on('connection', (socket) => {
     })
   })
 
+  socket.on('revoke-admin', (payload = {}) => {
+    const session = socketSessions.get(socket.id)
+    if (!session?.roomId || session.roomId !== payload.roomId) {
+      return
+    }
+
+    const room = rooms.get(session.roomId)
+    if (!room || room.superAdminSocketId !== socket.id) {
+      return
+    }
+
+    const targetParticipant = room.participants.get(payload.targetId)
+    if (
+      !targetParticipant
+      || targetParticipant.id === socket.id
+      || room.superAdminSocketId === targetParticipant.id
+      || !room.adminSocketIds.has(targetParticipant.id)
+    ) {
+      return
+    }
+
+    room.adminSocketIds.delete(targetParticipant.id)
+    if (targetParticipant.clientId) {
+      room.adminClientIds.delete(targetParticipant.clientId)
+    }
+
+    if (room.controllerSocketId === targetParticipant.id) {
+      setController(room, null, null)
+      notifyRemoteControlChanged(session.roomId, null, null)
+    }
+
+    if (room.sharedMedia?.kind === 'video' && room.sharedMedia.sync?.controllerId === targetParticipant.id) {
+      room.sharedMedia.sync = {
+        ...room.sharedMedia.sync,
+        controllerId: room.superAdminSocketId || room.sharedMedia.ownerId || null,
+        updatedAt: Date.now()
+      }
+    }
+
+    broadcastParticipants(session.roomId, room)
+
+    io.to(session.roomId).emit('admin-revoked', {
+      revokedById: socket.id,
+      revokedByName: session.userName,
+      targetId: targetParticipant.id,
+      targetName: targetParticipant.name
+    })
+  })
+
   socket.on('webpage-share', (payload = {}) => {
     const session = socketSessions.get(socket.id)
     if (!session?.roomId || session.roomId !== payload.roomId) {
       return
     }
-    
+
     const room = rooms.get(session.roomId)
-    if (!room) return
-    
+    if (!room) {
+      return
+    }
+
+    if (!isAdminSocket(room, socket.id)) {
+      socket.emit('permission-denied', { message: '仅管理员可以控制共享内容' })
+      return
+    }
+
     const userName = session.userName || `成员${socket.id.slice(0, 4)}`
-    
+    const webpageHistory = normalizeWebpageHistoryEntries(payload.webpageHistory)
+    const fallbackUrl = `${payload.url || ''}`.trim()
+    const fallbackFileName = `${payload.fileName || fallbackUrl}`.trim() || fallbackUrl
+    const history = webpageHistory.length
+      ? webpageHistory
+      : (fallbackUrl
+        ? [{
+            id: `webpage_entry_${Date.now()}`,
+            url: fallbackUrl,
+            fileName: fallbackFileName,
+            reloadToken: Number(payload.reloadToken || Date.now())
+          }]
+        : [])
+    const webpageActiveIndex = Math.min(
+      Math.max(Number(payload.webpageActiveIndex || history.length - 1), 0),
+      Math.max(history.length - 1, 0)
+    )
+    const activeEntry = history[webpageActiveIndex]
+    if (!activeEntry) {
+      return
+    }
+
     room.sharedMedia = {
       id: payload.mediaId,
       kind: 'webpage',
-      fileName: payload.fileName,
+      fileName: activeEntry.fileName,
       fileType: 'webpage',
       fileSize: 0,
       ownerId: socket.id,
       ownerName: userName,
-      url: payload.url
+      url: activeEntry.url,
+      reloadToken: Number(activeEntry.reloadToken || Date.now()),
+      webpageHistory: history,
+      webpageActiveIndex
     }
-    
+
     io.to(session.roomId).emit('webpage-share', {
       mediaId: payload.mediaId,
-      url: payload.url,
-      fileName: payload.fileName,
+      url: activeEntry.url,
+      fileName: activeEntry.fileName,
       ownerId: socket.id,
-      ownerName: userName
+      ownerName: userName,
+      reloadToken: room.sharedMedia.reloadToken,
+      webpageHistory: history,
+      webpageActiveIndex
     })
   })
 

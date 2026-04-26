@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import http from 'node:http'
 import { io as createClient } from 'socket.io-client'
 import { once } from 'node:events'
 import { getAvailablePort, startServer, stopServer } from '../helpers/serverHarness.mjs'
@@ -9,8 +10,13 @@ function connect(baseUrl) {
   return once(socket, 'connect').then(() => socket)
 }
 
-function joinRoom(socket, roomId, userName, clientId) {
-  socket.emit('join-room', { roomId, userName, clientId, requestAdmin: true })
+function joinRoom(socket, roomId, userName, clientId, options = {}) {
+  socket.emit('join-room', {
+    roomId,
+    userName,
+    clientId,
+    requestAdmin: options.requestAdmin ?? true
+  })
   return once(socket, 'room-state').then(([payload]) => payload)
 }
 
@@ -219,6 +225,210 @@ test('被授予管理员后可全局控制视频播放进度与静音', async (t
   assert.equal(controlPayload.sync?.muted, false)
   assert.equal(controlPayload.sync?.controllerId, admin.id)
 })
+
+test('超级管理员可控制管理员共享的视频进度并同步给管理员', async (t) => {
+  const port = await getAvailablePort()
+  const server = await startServer(port)
+  t.after(async () => { await stopServer(server) })
+
+  const baseUrl = `http://127.0.0.1:${port}`
+  const owner = await connect(baseUrl)
+  const admin = await connect(baseUrl)
+  t.after(() => owner.close())
+  t.after(() => admin.close())
+
+  await joinRoom(owner, '900010', '创建者', 'owner-client')
+  const ownerSawAdminJoin = onceWithTimeout(owner, 'participants-changed')
+  const adminSawJoin = onceWithTimeout(admin, 'participants-changed')
+  await joinRoom(admin, '900010', '管理员A', 'admin-client')
+  await ownerSawAdminJoin
+  await adminSawJoin
+
+  const adminSawGrant = onceWithTimeout(admin, 'participants-changed')
+  owner.emit('grant-admin', { roomId: '900010', targetId: admin.id })
+  await adminSawGrant
+
+  const ownerSawShareStarted = onceWithTimeout(owner, 'share-started')
+  admin.emit('share-start', {
+    roomId: '900010',
+    media: {
+      id: 'video-900010',
+      kind: 'video',
+      fileName: 'demo.mp4',
+      fileType: 'video/mp4',
+      fileSize: 1024,
+      duration: 90,
+      deliveryMode: 'file'
+    }
+  })
+  await ownerSawShareStarted
+
+  const adminSawControl = onceWithTimeout(admin, 'share-control')
+  owner.emit('share-control', {
+    roomId: '900010',
+    mediaId: 'video-900010',
+    action: 'seek',
+    currentTime: 27.25,
+    duration: 90,
+    playing: true,
+    muted: false
+  })
+
+  const [controlPayload] = await adminSawControl
+  assert.equal(controlPayload.mediaId, 'video-900010')
+  assert.equal(controlPayload.sync?.currentTime, 27.25)
+  assert.equal(controlPayload.sync?.playing, true)
+  assert.equal(controlPayload.sync?.muted, false)
+  assert.equal(controlPayload.sync?.controllerId, owner.id)
+})
+
+test('被授予管理员后，同 clientId 重连即使未显式请求管理员，也会恢复管理员身份并继续拥有全局控制权限', async (t) => {
+  const port = await getAvailablePort()
+  const server = await startServer(port)
+  t.after(async () => { await stopServer(server) })
+
+  const baseUrl = `http://127.0.0.1:${port}`
+  const owner = await connect(baseUrl)
+  const admin = await connect(baseUrl)
+  t.after(() => owner.close())
+  t.after(() => admin.close())
+
+  await joinRoom(owner, '900009', '创建者', 'owner-client')
+  const ownerSawAdminJoin = onceWithTimeout(owner, 'participants-changed')
+  const adminSawJoin = onceWithTimeout(admin, 'participants-changed')
+  await joinRoom(admin, '900009', '管理员A', 'admin-client', { requestAdmin: false })
+  await ownerSawAdminJoin
+  await adminSawJoin
+
+  const adminSawGrant = onceWithTimeout(admin, 'participants-changed')
+  owner.emit('grant-admin', { roomId: '900009', targetId: admin.id })
+  const [grantedState] = await adminSawGrant
+  assert.equal(grantedState.participants.find((item) => item.name === '管理员A')?.isAdmin, true)
+
+  const ownerSawAdminLeave = onceWithTimeout(owner, 'participants-changed')
+  admin.disconnect()
+  await ownerSawAdminLeave
+
+  const reconnectedAdmin = await connect(baseUrl)
+  t.after(() => reconnectedAdmin.close())
+  const restoredState = await joinRoom(reconnectedAdmin, '900009', '管理员A', 'admin-client', { requestAdmin: false })
+  const restoredAdmin = restoredState.participants.find((item) => item.name === '管理员A')
+  assert.equal(restoredAdmin?.id, reconnectedAdmin.id)
+  assert.equal(restoredAdmin?.isSuperAdmin, false)
+  assert.equal(restoredAdmin?.isAdmin, true)
+
+  owner.emit('share-start', {
+    roomId: '900009',
+    media: {
+      id: 'video-900009',
+      kind: 'video',
+      fileName: 'demo.mp4',
+      fileType: 'video/mp4',
+      fileSize: 1024,
+      duration: 90,
+      deliveryMode: 'stream',
+      streamId: 'stream-900009'
+    }
+  })
+  await onceWithTimeout(reconnectedAdmin, 'share-started')
+
+  const ownerSawControl = onceWithTimeout(owner, 'share-control')
+  reconnectedAdmin.emit('share-control', {
+    roomId: '900009',
+    mediaId: 'video-900009',
+    action: 'pause',
+    currentTime: 24,
+    duration: 90,
+    playing: false,
+    muted: true
+  })
+
+  const [controlPayload] = await ownerSawControl
+  assert.equal(controlPayload.sync?.playing, false)
+  assert.equal(controlPayload.sync?.currentTime, 24)
+  assert.equal(controlPayload.sync?.muted, true)
+  assert.equal(controlPayload.sync?.controllerId, reconnectedAdmin.id)
+})
+
+test('超级管理员可以撤销管理员权限，撤销后目标失去全局控制权限', async (t) => {
+  const port = await getAvailablePort()
+  const server = await startServer(port)
+  t.after(async () => { await stopServer(server) })
+
+  const baseUrl = `http://127.0.0.1:${port}`
+  const owner = await connect(baseUrl)
+  const admin = await connect(baseUrl)
+  t.after(() => owner.close())
+  t.after(() => admin.close())
+
+  await joinRoom(owner, '900008', '创建者', 'owner-client')
+  const ownerSawAdminJoin = onceWithTimeout(owner, 'participants-changed')
+  const adminSawJoin = onceWithTimeout(admin, 'participants-changed')
+  await joinRoom(admin, '900008', '管理员A', 'admin-client')
+  await ownerSawAdminJoin
+  await adminSawJoin
+
+  const adminSawGrant = onceWithTimeout(admin, 'participants-changed')
+  owner.emit('grant-admin', { roomId: '900008', targetId: admin.id })
+  const [grantedState] = await adminSawGrant
+  assert.equal(grantedState.participants.find((item) => item.name === '管理员A')?.isAdmin, true)
+
+  const ownerSawRevoke = onceWithTimeout(owner, 'admin-revoked')
+  const adminSawRevoke = onceWithTimeout(admin, 'admin-revoked')
+  owner.emit('revoke-admin', { roomId: '900008', targetId: admin.id })
+
+  const [[ownerRevokePayload], [adminRevokePayload]] = await Promise.all([ownerSawRevoke, adminSawRevoke])
+  assert.deepEqual(ownerRevokePayload, {
+    revokedById: owner.id,
+    revokedByName: '创建者',
+    targetId: admin.id,
+    targetName: '管理员A'
+  })
+  assert.deepEqual(adminRevokePayload, ownerRevokePayload)
+
+  const revokedState = await readRoomState(baseUrl, '900008')
+  const revokedAdmin = revokedState.participants.find((item) => item.name === '管理员A')
+  assert.equal(revokedAdmin?.isAdmin, false)
+
+  owner.emit('share-start', {
+    roomId: '900008',
+    media: {
+      id: 'video-900008',
+      kind: 'video',
+      fileName: 'demo.mp4',
+      fileType: 'video/mp4',
+      fileSize: 1024,
+      duration: 90,
+      deliveryMode: 'file'
+    }
+  })
+  await onceWithTimeout(admin, 'share-started')
+
+  const adminSawDenied = onceWithTimeout(admin, 'permission-denied')
+  owner.emit('share-control', {
+    roomId: '900008',
+    mediaId: 'video-900008',
+    action: 'seek',
+    currentTime: 12,
+    duration: 90,
+    playing: true,
+    muted: false
+  })
+  await onceWithTimeout(admin, 'share-control')
+
+  admin.emit('share-control', {
+    roomId: '900008',
+    mediaId: 'video-900008',
+    action: 'seek',
+    currentTime: 36,
+    duration: 90,
+    playing: true,
+    muted: false
+  })
+  const [deniedPayload] = await adminSawDenied
+  assert.equal(deniedPayload.action, 'share-control')
+})
+
 test('只有超级管理员可以授予管理员，普通成员或普通管理员发起 grant-admin 不生效', async (t) => {
   const port = await getAvailablePort()
   const server = await startServer(port)
@@ -376,4 +586,14 @@ test('最后一个管理员离开时房间关闭', async (t) => {
   admin.off('participants-changed', handleStaleParticipantsChanged)
   admin.off('peer-joined', handleStalePeerJoined)
   assert.equal(staleRoomEvent, false)
+})
+
+test('网页共享移除代理后，/webpage-proxy 路由不再可用', async (t) => {
+  const port = await getAvailablePort()
+  const server = await startServer(port)
+  t.after(async () => { await stopServer(server) })
+
+  const response = await fetch(`http://127.0.0.1:${port}/webpage-proxy?target=${encodeURIComponent('https://example.com/')}`)
+
+  assert.equal(response.status, 404)
 })
