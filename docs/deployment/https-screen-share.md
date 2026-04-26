@@ -22,10 +22,9 @@ sudo ./install.sh
 脚本会依次询问：
 - 是否配置域名
 - 是否启用 HTTPS
-- HTTPS 端口（默认 443，仅启用 HTTPS 时询问）
 - 应用服务端口（默认 3002）
 
-如果选择配置域名，脚本会自动安装 Caddy、备份 `/etc/caddy/Caddyfile`，并写入 ShareRoom 对应站点配置；如果你不是走标准 `443`，可以直接在脚本里指定自定义 HTTPS 端口。
+如果选择配置域名，脚本会自动安装 Caddy、备份 `/etc/caddy/Caddyfile`，并写入 ShareRoom 对应站点配置。启用 HTTPS 时，Caddy 会固定通过 `443` 对外提供访问，再反向代理到你设置的应用服务端口。
 
 ## 一键启停脚本
 现在项目根目录还提供：

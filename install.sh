@@ -10,7 +10,6 @@ NC="\033[0m"
 PROJECT_ROOT=$(cd "$(dirname "$0")" && pwd)
 CADDYFILE_PATH="/etc/caddy/Caddyfile"
 APP_PORT="3002"
-HTTPS_PORT="443"
 CONFIGURE_DOMAIN="n"
 USE_HTTPS="n"
 DOMAIN=""
@@ -190,14 +189,9 @@ render_caddy_block() {
   local domain="$1"
   local app_port="$2"
   local use_https="$3"
-  local https_port="$4"
   local site_address="$domain"
 
-  if [ "$use_https" = "y" ]; then
-    if [ "$https_port" != "443" ]; then
-      site_address="https://$domain:$https_port"
-    fi
-  else
+  if [ "$use_https" != "y" ]; then
     site_address="http://$domain"
   fi
 
@@ -214,7 +208,6 @@ configure_caddy() {
   local domain="$1"
   local app_port="$2"
   local use_https="$3"
-  local https_port="$4"
   local temp_file
   local clean_file
   local start_marker="# BEGIN ShareRoom $domain"
@@ -241,7 +234,7 @@ configure_caddy() {
     echo "" >> "$clean_file"
   fi
 
-  render_caddy_block "$domain" "$app_port" "$use_https" "$https_port" >> "$clean_file"
+  render_caddy_block "$domain" "$app_port" "$use_https" >> "$clean_file"
   $SUDO mkdir -p "$(dirname "$CADDYFILE_PATH")"
   $SUDO cp "$clean_file" "$CADDYFILE_PATH"
   rm -f "$temp_file" "$clean_file"
@@ -274,9 +267,6 @@ prompt_domain_configuration() {
   done
 
   USE_HTTPS=$(ask_yes_no "是否启用 HTTPS" "y")
-  if [ "$USE_HTTPS" = "y" ]; then
-    HTTPS_PORT=$(ask_with_default "请输入 HTTPS 端口" "443")
-  fi
   APP_PORT=$(ask_with_default "请输入应用服务端口" "3002")
 
   if [ "$USE_HTTPS" = "y" ] && is_ip_address "$DOMAIN"; then
@@ -301,12 +291,7 @@ print_summary() {
 
   if [ "$CONFIGURE_DOMAIN" = "y" ]; then
     if [ "$USE_HTTPS" = "y" ]; then
-      if [ "$HTTPS_PORT" = "443" ]; then
-        echo "部署访问地址: https://$DOMAIN"
-      else
-        echo "部署访问地址: https://$DOMAIN:$HTTPS_PORT"
-      fi
-      echo "HTTPS 端口: $HTTPS_PORT"
+      echo "部署访问地址: https://$DOMAIN"
     else
       echo "部署访问地址: http://$DOMAIN"
     fi
@@ -322,7 +307,7 @@ prompt_domain_configuration
 
 if [ "$CONFIGURE_DOMAIN" = "y" ]; then
   install_caddy
-  configure_caddy "$DOMAIN" "$APP_PORT" "$USE_HTTPS" "$HTTPS_PORT"
+  configure_caddy "$DOMAIN" "$APP_PORT" "$USE_HTTPS"
 fi
 
 print_summary
