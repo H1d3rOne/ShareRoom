@@ -22,9 +22,10 @@ sudo ./install.sh
 脚本会依次询问：
 - 是否配置域名
 - 是否启用 HTTPS
+- HTTPS 端口（默认 443，仅启用 HTTPS 时询问）
 - 应用服务端口（默认 3002）
 
-如果选择配置域名，脚本会自动安装 Caddy、备份 `/etc/caddy/Caddyfile`，并写入 ShareRoom 对应站点配置。
+如果选择配置域名，脚本会自动安装 Caddy、备份 `/etc/caddy/Caddyfile`，并写入 ShareRoom 对应站点配置；如果你不是走标准 `443`，可以直接在脚本里指定自定义 HTTPS 端口。
 
 ## 一键启停脚本
 现在项目根目录还提供：
@@ -32,12 +33,14 @@ sudo ./install.sh
 ```bash
 ./start.sh
 ./stop.sh
+./uninstall.sh
 ```
 
 - `./start.sh`：构建前端、启动 ShareRoom 生产服务、尝试启动 Caddy
 - `./stop.sh`：停止 ShareRoom 生产服务、尝试停止 Caddy
+- `./uninstall.sh`：停止 ShareRoom、回滚 ShareRoom 写入的 Caddy 配置、卸载 Caddy、清理 `.run/`
 
-如果你已经通过 `install.sh` 配置好域名与 Caddy，后续通常只需要执行 `./start.sh` 和 `./stop.sh`。
+如果你已经通过 `install.sh` 配置好域名与 Caddy，后续通常只需要执行 `./start.sh` 和 `./stop.sh`。如需还原安装前状态，可执行 `./uninstall.sh`。
 
 ## 方案 A：推荐使用 Caddy（无需 Nginx）
 
