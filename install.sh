@@ -8,7 +8,9 @@ RED="\033[0;31m"
 NC="\033[0m"
 
 PROJECT_ROOT=$(cd "$(dirname "$0")" && pwd)
-CADDYFILE_PATH="/etc/caddy/Caddyfile"
+NGINX_SITES_AVAILABLE_DIR="/etc/nginx/sites-available"
+NGINX_SITES_ENABLED_DIR="/etc/nginx/sites-enabled"
+CERTBOT_CERT_DIR="/etc/letsencrypt/live"
 APP_PORT="3002"
 CONFIGURE_DOMAIN="n"
 USE_HTTPS="n"
@@ -121,6 +123,31 @@ ensure_command() {
   fi
 }
 
+site_file_path() {
+  local domain="$1"
+  echo "$NGINX_SITES_AVAILABLE_DIR/$domain"
+}
+
+site_link_path() {
+  local domain="$1"
+  echo "$NGINX_SITES_ENABLED_DIR/$domain"
+}
+
+fullchain_path() {
+  local domain="$1"
+  echo "$CERTBOT_CERT_DIR/$domain/fullchain.pem"
+}
+
+privkey_path() {
+  local domain="$1"
+  echo "$CERTBOT_CERT_DIR/$domain/privkey.pem"
+}
+
+certificates_exist() {
+  local domain="$1"
+  [ -f "$(fullchain_path "$domain")" ] && [ -f "$(privkey_path "$domain")" ]
+}
+
 install_project_dependencies() {
   ensure_command node "错误: 未检测到 Node.js，请先安装 Node.js (>= 16.0.0)。下载地址: https://nodejs.org/"
   ensure_command npm "错误: 未检测到 npm，请先安装 npm"
@@ -151,99 +178,208 @@ install_project_dependencies() {
   print_success "后端依赖安装完成"
 }
 
-install_caddy() {
-  if command -v caddy >/dev/null 2>&1; then
-    print_success "已检测到 Caddy，跳过安装"
-    return 0
-  fi
-
+install_nginx_stack() {
   require_sudo_if_needed
 
   if ! command -v apt-get >/dev/null 2>&1; then
-    print_error "当前系统不是 apt 系发行版，暂未集成自动安装 Caddy，请参考 docs/deployment/https-screen-share.md 手动安装"
+    print_error "当前系统不是 apt 系发行版，暂未集成自动安装 Nginx / certbot，请手动安装后重试"
     exit 1
   fi
 
-  echo ""
-  echo -e "${YELLOW}[部署] 安装 Caddy...${NC}"
-  $SUDO apt-get update
-  $SUDO apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl gpg
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | $SUDO gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | $SUDO tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
-  $SUDO apt-get update
-  $SUDO apt-get install -y caddy
-  print_success "Caddy 安装完成"
+  if ! command -v nginx >/dev/null 2>&1; then
+    echo ""
+    echo -e "${YELLOW}[部署] 安装 Nginx...${NC}"
+    $SUDO apt-get update
+    $SUDO apt-get install -y nginx
+    print_success "Nginx 安装完成"
+  else
+    print_success "已检测到 Nginx，跳过安装"
+  fi
+
+  if [ "$USE_HTTPS" = "y" ]; then
+    if ! command -v certbot >/dev/null 2>&1; then
+      echo ""
+      echo -e "${YELLOW}[部署] 安装 certbot...${NC}"
+      $SUDO apt-get update
+      $SUDO apt-get install -y certbot python3-certbot-nginx
+      print_success "certbot 安装完成"
+    else
+      print_success "已检测到 certbot，跳过安装"
+    fi
+  fi
 }
 
-backup_caddyfile() {
+backup_nginx_site() {
+  local domain="$1"
+  local site_file
+  site_file=$(site_file_path "$domain")
+
   require_sudo_if_needed
 
-  if [ -f "$CADDYFILE_PATH" ]; then
-    local backup_path="${CADDYFILE_PATH}.bak.$(date +%Y%m%d%H%M%S)"
-    $SUDO cp "$CADDYFILE_PATH" "$backup_path"
-    print_success "已备份现有 Caddyfile -> $backup_path"
+  if [ -f "$site_file" ]; then
+    local backup_path="${site_file}.bak.$(date +%Y%m%d%H%M%S)"
+    $SUDO cp "$site_file" "$backup_path"
+    print_success "已备份现有 Nginx 站点配置 -> $backup_path"
   fi
 }
 
-render_caddy_block() {
-  local domain="$1"
-  local app_port="$2"
-  local use_https="$3"
-  local site_address="$domain"
-
-  if [ "$use_https" != "y" ]; then
-    site_address="http://$domain"
-  fi
+render_proxy_location() {
+  local app_port="$1"
 
   cat <<BLOCK
-# BEGIN ShareRoom $domain
-$site_address {
-  reverse_proxy 127.0.0.1:$app_port
-}
-# END ShareRoom $domain
+    location / {
+        proxy_pass http://127.0.0.1:$app_port;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600;
+        proxy_send_timeout 3600;
+    }
 BLOCK
 }
 
-configure_caddy() {
+render_nginx_config() {
   local domain="$1"
   local app_port="$2"
   local use_https="$3"
+  local cert_ready="$4"
+
+  if [ "$use_https" = "y" ] && [ "$cert_ready" = "y" ]; then
+    cat <<BLOCK
+# BEGIN ShareRoom $domain
+server {
+    listen 80;
+    server_name $domain;
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name $domain;
+    ssl_certificate $(fullchain_path "$domain");
+    ssl_certificate_key $(privkey_path "$domain");
+$(render_proxy_location "$app_port")
+}
+# END ShareRoom $domain
+BLOCK
+  else
+    cat <<BLOCK
+# BEGIN ShareRoom $domain
+server {
+    listen 80;
+    server_name $domain;
+$(render_proxy_location "$app_port")
+}
+# END ShareRoom $domain
+BLOCK
+  fi
+}
+
+write_nginx_site() {
+  local domain="$1"
+  local app_port="$2"
+  local use_https="$3"
+  local cert_ready="$4"
+  local site_file
+  site_file=$(site_file_path "$domain")
+
   local temp_file
-  local clean_file
-  local start_marker="# BEGIN ShareRoom $domain"
-  local end_marker="# END ShareRoom $domain"
+  temp_file=$(mktemp)
+  render_nginx_config "$domain" "$app_port" "$use_https" "$cert_ready" > "$temp_file"
+
+  $SUDO mkdir -p "$NGINX_SITES_AVAILABLE_DIR" "$NGINX_SITES_ENABLED_DIR"
+  $SUDO cp "$temp_file" "$site_file"
+  rm -f "$temp_file"
+}
+
+enable_nginx_site() {
+  local domain="$1"
+  local site_file
+  local site_link
+  site_file=$(site_file_path "$domain")
+  site_link=$(site_link_path "$domain")
+
+  $SUDO ln -sfn "$site_file" "$site_link"
+}
+
+reload_nginx_config() {
+  require_sudo_if_needed
+
+  if ! command -v nginx >/dev/null 2>&1; then
+    print_error "未检测到 Nginx，无法校验并重载配置"
+    exit 1
+  fi
+
+  $SUDO nginx -t || {
+    print_error "Nginx 配置校验失败"
+    exit 1
+  }
+
+  if command -v systemctl >/dev/null 2>&1; then
+    $SUDO systemctl reload nginx || {
+      print_error "Nginx 重载失败"
+      exit 1
+    }
+  else
+    $SUDO nginx -s reload || {
+      print_error "Nginx 重载失败"
+      exit 1
+    }
+  fi
+}
+
+request_https_certificate() {
+  local domain="$1"
 
   require_sudo_if_needed
-  backup_caddyfile
+  ensure_command certbot "错误: 未检测到 certbot，请先安装 certbot"
 
-  temp_file=$(mktemp)
-  clean_file=$(mktemp)
-
-  if [ -f "$CADDYFILE_PATH" ]; then
-    $SUDO cp "$CADDYFILE_PATH" "$temp_file"
-    awk -v start="$start_marker" -v end="$end_marker" '
-      $0 == start { skip=1; next }
-      $0 == end { skip=0; next }
-      !skip { print }
-    ' "$temp_file" > "$clean_file"
-  else
-    : > "$clean_file"
+  if certificates_exist "$domain"; then
+    print_success "已检测到 $domain 的现有证书，跳过签发"
+    return 0
   fi
 
-  if [ -s "$clean_file" ] && [ "$(tail -c 1 "$clean_file" 2>/dev/null)" != "" ]; then
-    echo "" >> "$clean_file"
+  print_warning "开始为 $domain 申请 HTTPS 证书（将调用 certbot --nginx -d $domain）..."
+  $SUDO certbot --nginx -d "$domain" || {
+    print_error "certbot 申请证书失败，请根据提示手动处理后重试"
+    exit 1
+  }
+
+  if ! certificates_exist "$domain"; then
+    print_error "证书申请完成后未找到证书文件，请手动检查 certbot 状态"
+    exit 1
+  fi
+}
+
+configure_nginx() {
+  local domain="$1"
+  local app_port="$2"
+  local use_https="$3"
+  local cert_ready="n"
+
+  require_sudo_if_needed
+  backup_nginx_site "$domain"
+
+  if [ "$use_https" = "y" ] && certificates_exist "$domain"; then
+    cert_ready="y"
   fi
 
-  render_caddy_block "$domain" "$app_port" "$use_https" >> "$clean_file"
-  $SUDO mkdir -p "$(dirname "$CADDYFILE_PATH")"
-  $SUDO cp "$clean_file" "$CADDYFILE_PATH"
-  rm -f "$temp_file" "$clean_file"
+  write_nginx_site "$domain" "$app_port" "$use_https" "$cert_ready"
+  enable_nginx_site "$domain"
+  reload_nginx_config
 
-  $SUDO systemctl enable caddy >/dev/null 2>&1 || true
-  $SUDO systemctl reload caddy 2>/dev/null || $SUDO systemctl restart caddy
-  $SUDO systemctl status caddy --no-pager || true
+  if [ "$use_https" = "y" ] && [ "$cert_ready" != "y" ]; then
+    request_https_certificate "$domain"
+    write_nginx_site "$domain" "$app_port" "$use_https" "y"
+    enable_nginx_site "$domain"
+    reload_nginx_config
+  fi
 
-  print_success "Caddy 配置完成: $domain"
+  print_success "Nginx 配置完成: $domain"
 }
 
 prompt_domain_configuration() {
@@ -260,7 +396,7 @@ prompt_domain_configuration() {
       continue
     fi
     if ! is_valid_domain "$DOMAIN"; then
-      print_warning "请输入有效域名，例如 share.example.com"
+      print_warning "请输入有效域名，例如 room.thanhthao.us.ci"
       continue
     fi
     break
@@ -292,22 +428,24 @@ print_summary() {
   if [ "$CONFIGURE_DOMAIN" = "y" ]; then
     if [ "$USE_HTTPS" = "y" ]; then
       echo "部署访问地址: https://$DOMAIN"
+      echo "HTTPS 入口: Nginx 固定监听 443"
     else
       echo "部署访问地址: http://$DOMAIN"
     fi
     echo "应用服务端口: $APP_PORT"
+    echo "Nginx 反代目标: http://127.0.0.1:$APP_PORT"
   else
-    echo "未配置域名/Caddy，仍可使用本地或已有部署方式启动项目。"
+    echo "未配置域名/Nginx，仍可使用本地或已有部署方式启动项目。"
   fi
 }
 
-print_section "ShareRoom 项目依赖安装脚本"
+print_section "ShareRoom 项目依赖安装脚本（Nginx 模式）"
 install_project_dependencies
 prompt_domain_configuration
 
 if [ "$CONFIGURE_DOMAIN" = "y" ]; then
-  install_caddy
-  configure_caddy "$DOMAIN" "$APP_PORT" "$USE_HTTPS"
+  install_nginx_stack
+  configure_nginx "$DOMAIN" "$APP_PORT" "$USE_HTTPS"
 fi
 
 print_summary

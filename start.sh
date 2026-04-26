@@ -12,16 +12,6 @@ PID_DIR="$PROJECT_ROOT/.run"
 PID_FILE="$PID_DIR/shareroom.pid"
 LOG_FILE="$PID_DIR/shareroom.log"
 
-if [ "${EUID:-$(id -u)}" -eq 0 ]; then
-  SUDO=""
-else
-  if command -v sudo >/dev/null 2>&1; then
-    SUDO="sudo"
-  else
-    SUDO=""
-  fi
-fi
-
 print_success() {
   echo -e "${GREEN}$1${NC}"
 }
@@ -32,26 +22,6 @@ print_warning() {
 
 print_error() {
   echo -e "${RED}$1${NC}"
-}
-
-start_caddy() {
-  if ! command -v systemctl >/dev/null 2>&1; then
-    print_warning "未检测到 systemctl，跳过 Caddy 启动"
-    return 0
-  fi
-
-  if ! command -v caddy >/dev/null 2>&1; then
-    print_warning "未检测到 Caddy，跳过 Caddy 启动"
-    return 0
-  fi
-
-  if [ -n "$SUDO" ]; then
-    $SUDO systemctl start caddy >/dev/null 2>&1 || print_warning "Caddy 启动失败，请手动检查"
-    $SUDO systemctl status caddy --no-pager >/dev/null 2>&1 || true
-  else
-    systemctl start caddy >/dev/null 2>&1 || print_warning "Caddy 启动失败，请手动检查"
-    systemctl status caddy --no-pager >/dev/null 2>&1 || true
-  fi
 }
 
 stop_existing_app() {
@@ -106,11 +76,8 @@ if ! kill -0 "$pid" 2>/dev/null; then
   exit 1
 fi
 
-print_warning "启动 Caddy..."
-start_caddy
-
 print_success "ShareRoom 服务启动完成"
 echo "应用 PID: $pid"
 echo "日志文件: $LOG_FILE"
 echo "生产服务地址: http://127.0.0.1:3002"
-echo "如已配置域名与 HTTPS，请通过你的域名访问"
+echo "如已配置 Nginx 与 HTTPS，请通过你的域名访问"

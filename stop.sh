@@ -11,40 +11,12 @@ PROJECT_ROOT=$(cd "$(dirname "$0")" && pwd)
 PID_DIR="$PROJECT_ROOT/.run"
 PID_FILE="$PID_DIR/shareroom.pid"
 
-if [ "${EUID:-$(id -u)}" -eq 0 ]; then
-  SUDO=""
-else
-  if command -v sudo >/dev/null 2>&1; then
-    SUDO="sudo"
-  else
-    SUDO=""
-  fi
-fi
-
 print_success() {
   echo -e "${GREEN}$1${NC}"
 }
 
 print_warning() {
   echo -e "${YELLOW}$1${NC}"
-}
-
-stop_caddy() {
-  if ! command -v systemctl >/dev/null 2>&1; then
-    print_warning "未检测到 systemctl，跳过 Caddy 停止"
-    return 0
-  fi
-
-  if ! command -v caddy >/dev/null 2>&1; then
-    print_warning "未检测到 Caddy，跳过 Caddy 停止"
-    return 0
-  fi
-
-  if [ -n "$SUDO" ]; then
-    $SUDO systemctl stop caddy >/dev/null 2>&1 || print_warning "Caddy 停止失败，请手动检查"
-  else
-    systemctl stop caddy >/dev/null 2>&1 || print_warning "Caddy 停止失败，请手动检查"
-  fi
 }
 
 stop_app() {
@@ -71,5 +43,4 @@ stop_app() {
 }
 
 stop_app
-stop_caddy
-print_success "所有服务已停止"
+print_success "ShareRoom 服务已停止"

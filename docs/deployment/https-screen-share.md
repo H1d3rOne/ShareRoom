@@ -1,4 +1,4 @@
-# ShareRoom 屏幕共享 HTTPS 部署说明
+# ShareRoom 屏幕共享 HTTPS 部署说明（Nginx）
 
 ## 为什么服务器上会提示不支持屏幕共享
 屏幕共享依赖浏览器的 `navigator.mediaDevices.getDisplayMedia()`。
@@ -13,7 +13,7 @@
 如果页面不是 HTTPS，浏览器通常会直接隐藏这个 API，前端就无法发起屏幕共享。
 
 ## 一键安装脚本（交互式）
-如果你使用项目根目录的 `install.sh`，现在可以在安装依赖后直接交互式配置域名与 Caddy：
+如果你使用项目根目录的 `install.sh`，现在可以在安装依赖后直接交互式配置域名与 Nginx：
 
 ```bash
 sudo ./install.sh
@@ -24,7 +24,15 @@ sudo ./install.sh
 - 是否启用 HTTPS
 - 应用服务端口（默认 3002）
 
-如果选择配置域名，脚本会自动安装 Caddy、备份 `/etc/caddy/Caddyfile`，并写入 ShareRoom 对应站点配置。启用 HTTPS 时，Caddy 会固定通过 `443` 对外提供访问，再反向代理到你设置的应用服务端口。
+如果选择配置域名，脚本会：
+- 检测并安装 `nginx`
+- 若启用 HTTPS，检测并安装 `certbot` 与 `python3-certbot-nginx`
+- 写入 `/etc/nginx/sites-available/<domain>`
+- 建立 `/etc/nginx/sites-enabled/<domain>` 软链
+- `nginx -t` 校验后 reload Nginx
+- 若启用 HTTPS，则通过 `certbot --nginx -d <domain>` 申请证书
+
+启用 HTTPS 后，Nginx 会固定通过 `443` 对外提供访问，再反向代理到你设置的应用服务端口。
 
 ## 一键启停脚本
 现在项目根目录还提供：
@@ -35,14 +43,13 @@ sudo ./install.sh
 ./uninstall.sh
 ```
 
-- `./start.sh`：构建前端、启动 ShareRoom 生产服务、尝试启动 Caddy
-- `./stop.sh`：停止 ShareRoom 生产服务、尝试停止 Caddy
-- `./uninstall.sh`：停止 ShareRoom、回滚 ShareRoom 写入的 Caddy 配置、卸载 Caddy、清理 `.run/`
+- `./start.sh`：构建前端并启动 ShareRoom 生产服务
+- `./stop.sh`：停止 ShareRoom 生产服务
+- `./uninstall.sh`：停止 ShareRoom、移除 ShareRoom 对应 Nginx 站点配置、reload Nginx、清理 `.run/`
 
-如果你已经通过 `install.sh` 配置好域名与 Caddy，后续通常只需要执行 `./start.sh` 和 `./stop.sh`。如需还原安装前状态，可执行 `./uninstall.sh`。
+这些脚本不会停止整个 Nginx，因此不会影响同机其他已在运行的 Nginx 应用。
 
-## 方案 A：推荐使用 Caddy（无需 Nginx）
-
+## 推荐生产启动方式
 当前推荐的生产启动方式是：
 
 ```bash
@@ -51,60 +58,64 @@ npm run serve
 
 它会先执行 `npm run build`，再由 `node server/server.js` 统一托管 `dist` 和 Socket.IO。
 
-### 1. 准备条件
-- 一个已解析到服务器公网 IP 的域名，例如 `share.example.com`
-- 服务器开放端口：`80`、`443`
-- 生产服务运行在 `3002`
+## 请求路径
+当前生产请求链路是：
 
-### 2. 安装 Caddy
-以 Ubuntu / Debian 为例：
-
-```bash
-sudo apt update
-sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-sudo apt update
-sudo apt install -y caddy
+```text
+浏览器 -> Nginx(443) -> ShareRoom(127.0.0.1:3002)
 ```
 
-### 3. 配置 Caddy
-编辑 `/etc/caddy/Caddyfile`：
+也就是说：
+- 外部用户访问：`https://room.thanhthao.us.ci`
+- ShareRoom 应用实际监听：`127.0.0.1:3002`
 
-```caddy
-share.example.com {
-  reverse_proxy 127.0.0.1:3002
+## 手动等价 Nginx 配置
+如果你不想使用 `install.sh` 自动写入，也可以手动配置：
+
+```nginx
+# BEGIN ShareRoom room.thanhthao.us.ci
+server {
+    listen 80;
+    server_name room.thanhthao.us.ci;
+    return 301 https://$host$request_uri;
 }
+
+server {
+    listen 443 ssl http2;
+    server_name room.thanhthao.us.ci;
+    ssl_certificate /etc/letsencrypt/live/room.thanhthao.us.ci/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/room.thanhthao.us.ci/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3002;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600;
+        proxy_send_timeout 3600;
+    }
+}
+# END ShareRoom room.thanhthao.us.ci
 ```
 
-### 4. 启动服务
-先启动你的生产服务：
+然后执行：
 
 ```bash
-npm run serve
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
-再重载 Caddy：
+如果证书还未签发，再执行：
 
 ```bash
-sudo systemctl reload caddy
-sudo systemctl status caddy
+sudo certbot --nginx -d room.thanhthao.us.ci
 ```
 
-### 5. 访问方式
-以后统一使用：
-
-```text
-https://share.example.com
-```
-
-不要再使用：
-
-```text
-http://服务器IP:3001
-```
-
-### 6. 验证是否成功
+## 验证是否成功
 在浏览器控制台执行：
 
 ```js
@@ -118,36 +129,6 @@ location.href
 - `navigator.mediaDevices.getDisplayMedia` 是一个函数
 - `location.href` 以 `https://` 开头
 
-## 方案 B：Node / Express 直接托管 HTTPS（备选）
-如果你完全不想使用 Caddy/Nginx，也可以让 Node 直接监听 HTTPS。
-
-大致思路：
-1. `npm run build`
-2. 用 Express 托管 `dist`
-3. 让同一个 Node 服务同时提供页面与 Socket.IO
-4. 用 `https.createServer()` 代替 `http.createServer()`
-5. 绑定证书文件
-
-示意代码：
-
-```js
-const https = require('https')
-const fs = require('fs')
-const express = require('express')
-
-const app = express()
-app.use(express.static('dist'))
-
-const server = https.createServer({
-  key: fs.readFileSync('/path/to/privkey.pem'),
-  cert: fs.readFileSync('/path/to/fullchain.pem')
-}, app)
-
-server.listen(443)
-```
-
-这个方案也能解决屏幕共享问题，但证书续期、静态资源托管和运维通常没有 Caddy 省事。
-
 ## 故障排查
 如果你已经用了 HTTPS 仍然不行，继续检查：
 
@@ -160,7 +141,9 @@ navigator.userAgent
 
 ### 常见原因
 - 页面实际仍是 `http://`，只是跳转没配好
-- 使用了内嵌 WebView / 内置浏览器
+- 域名未正确解析到服务器
+- `certbot` 申请证书失败
+- Nginx 配置未 reload 成功
 - 浏览器版本过旧
 - 用户取消了授权
 - 不是通过用户点击事件触发屏幕共享

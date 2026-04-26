@@ -10,9 +10,10 @@ NC="\033[0m"
 PROJECT_ROOT=$(cd "$(dirname "$0")" && pwd)
 RUN_DIR="$PROJECT_ROOT/.run"
 STOP_SCRIPT="$PROJECT_ROOT/./stop.sh"
-CADDYFILE_PATH="/etc/caddy/Caddyfile"
-CADDY_SOURCE_LIST="/etc/apt/sources.list.d/caddy-stable.list"
-CADDY_KEYRING="/usr/share/keyrings/caddy-stable-archive-keyring.gpg"
+NGINX_SITES_AVAILABLE_DIR="/etc/nginx/sites-available"
+NGINX_SITES_ENABLED_DIR="/etc/nginx/sites-enabled"
+NGINX_CONF_D_DIR="/etc/nginx/conf.d"
+NGINX_CONFIG_CHANGED="n"
 
 if [ "${EUID:-$(id -u)}" -eq 0 ]; then
   SUDO=""
@@ -57,73 +58,104 @@ run_stop_script() {
   fi
 }
 
-restore_latest_caddy_backup() {
-  require_sudo_if_needed
+find_shareroom_site_files() {
+  local results=""
+  for dir in "$NGINX_SITES_AVAILABLE_DIR" "$NGINX_CONF_D_DIR"; do
+    if [ -d "$dir" ]; then
+      local current
+      current=$(grep -Rsl '^# BEGIN ShareRoom ' "$dir" 2>/dev/null || true)
+      if [ -n "$current" ]; then
+        results="${results}${current}\n"
+      fi
+    fi
+  done
 
+  if [ -n "$results" ]; then
+    printf '%b' "$results" | sed '/^$/d' | sort -u
+  fi
+}
+
+restore_latest_nginx_backup() {
+  local site_file="$1"
   local latest_backup
-  latest_backup=$(find /etc/caddy -maxdepth 1 -type f -name 'Caddyfile.bak.*' 2>/dev/null | sort | tail -n 1)
+  latest_backup=$(find "$(dirname "$site_file")" -maxdepth 1 -type f -name "$(basename "$site_file").bak.*" 2>/dev/null | sort | tail -n 1)
 
   if [ -n "$latest_backup" ]; then
-    $SUDO cp "$latest_backup" "$CADDYFILE_PATH"
-    print_success "已恢复 Caddyfile 备份: $latest_backup"
+    $SUDO cp "$latest_backup" "$site_file"
+    print_success "已恢复 Nginx 站点备份: $latest_backup"
+    NGINX_CONFIG_CHANGED="y"
     return 0
   fi
 
   return 1
 }
 
-remove_shareroom_caddy_blocks() {
-  require_sudo_if_needed
+remove_enabled_link() {
+  local site_file="$1"
+  local site_link="$NGINX_SITES_ENABLED_DIR/$(basename "$site_file")"
 
-  if [ ! -f "$CADDYFILE_PATH" ]; then
-    return 0
-  fi
-
-  local temp_file
-  temp_file=$(mktemp)
-
-  awk '
-    /^# BEGIN ShareRoom / { skip=1; next }
-    /^# END ShareRoom / { skip=0; next }
-    !skip { print }
-  ' "$CADDYFILE_PATH" > "$temp_file"
-
-  $SUDO cp "$temp_file" "$CADDYFILE_PATH"
-  rm -f "$temp_file"
-  print_success "已移除 ShareRoom 写入的 Caddy 配置块"
-}
-
-stop_caddy_service() {
-  if ! command -v systemctl >/dev/null 2>&1; then
-    return 0
-  fi
-
-  if [ -n "$SUDO" ]; then
-    $SUDO systemctl stop caddy >/dev/null 2>&1 || true
-    $SUDO systemctl disable caddy >/dev/null 2>&1 || true
-  else
-    systemctl stop caddy >/dev/null 2>&1 || true
-    systemctl disable caddy >/dev/null 2>&1 || true
+  if [ -L "$site_link" ] || [ -f "$site_link" ]; then
+    $SUDO rm -f "$site_link"
+    print_success "已移除 Nginx 启用链接: $site_link"
+    NGINX_CONFIG_CHANGED="y"
   fi
 }
 
-purge_caddy() {
+remove_shareroom_nginx_sites() {
   require_sudo_if_needed
 
-  if ! command -v apt-get >/dev/null 2>&1; then
-    print_warning "当前系统不是 apt 系发行版，跳过自动卸载 Caddy 包"
+  local site_files
+  site_files=$(find_shareroom_site_files)
+
+  if [ -z "$site_files" ]; then
+    print_warning "未检测到 ShareRoom 写入的 Nginx 站点配置"
     return 0
   fi
 
-  if dpkg -s caddy >/dev/null 2>&1; then
-    $SUDO apt-get purge -y caddy || print_warning "Caddy purge 失败，请手动检查"
-    $SUDO apt-get autoremove -y >/dev/null 2>&1 || true
-  else
-    print_warning "未检测到已安装的 Caddy 包，跳过 purge"
+  while IFS= read -r site_file; do
+    [ -z "$site_file" ] && continue
+    remove_enabled_link "$site_file"
+
+    if ! restore_latest_nginx_backup "$site_file"; then
+      $SUDO rm -f "$site_file"
+      print_success "已删除 ShareRoom Nginx 站点文件: $site_file"
+      NGINX_CONFIG_CHANGED="y"
+    fi
+  done <<EOF2
+$site_files
+EOF2
+}
+
+reload_nginx_config() {
+  require_sudo_if_needed
+
+  if [ "$NGINX_CONFIG_CHANGED" != "y" ]; then
+    return 0
   fi
 
-  $SUDO rm -f "$CADDY_SOURCE_LIST"
-  $SUDO rm -f "$CADDY_KEYRING"
+  if ! command -v nginx >/dev/null 2>&1; then
+    print_warning "未检测到 Nginx，跳过配置校验与重载"
+    return 0
+  fi
+
+  $SUDO nginx -t || {
+    print_error "Nginx 配置校验失败，请手动检查"
+    exit 1
+  }
+
+  if command -v systemctl >/dev/null 2>&1; then
+    $SUDO systemctl reload nginx || {
+      print_error "Nginx 重载失败，请手动检查"
+      exit 1
+    }
+  else
+    $SUDO nginx -s reload || {
+      print_error "Nginx 重载失败，请手动检查"
+      exit 1
+    }
+  fi
+
+  print_success "Nginx 配置已重载"
 }
 
 cleanup_project_runtime() {
@@ -131,21 +163,16 @@ cleanup_project_runtime() {
   print_success "已清理运行目录: $RUN_DIR"
 }
 
-print_warning "停止现有 ShareRoom / Caddy 服务..."
+print_warning "停止现有 ShareRoom 服务..."
 run_stop_script
 
-print_warning "回滚 Caddy 配置..."
-if ! restore_latest_caddy_backup; then
-  remove_shareroom_caddy_blocks
-fi
-stop_caddy_service
-
-print_warning "卸载 Caddy..."
-purge_caddy
+print_warning "移除 ShareRoom Nginx 站点配置..."
+remove_shareroom_nginx_sites
+reload_nginx_config
 
 print_warning "清理项目运行产物..."
 cleanup_project_runtime
 
 print_success "卸载完成"
-echo "已完成: 停止 ShareRoom、回滚 Caddy 配置、卸载 Caddy、清理 .run/"
-echo "未删除: 项目源码、node/npm、node_modules、dist"
+echo "已完成: 停止 ShareRoom、移除 ShareRoom Nginx 站点配置、reload Nginx、清理 .run/"
+echo "未删除: 原有 Nginx 其他站点、项目源码、node/npm、node_modules、dist"
