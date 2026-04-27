@@ -23,7 +23,7 @@ sudo ./install.sh
 - 是否配置域名
 - 是否启用 HTTPS
 - 应用服务端口（默认 3002）
-- 如果 `443` 已被非 Nginx 进程占用，会继续提示你输入一个新的 HTTPS 端口
+- 如果 `443` 已被非 Nginx 进程占用，脚本会自动改用 `8443`
 
 如果选择配置域名，脚本会：
 - 检测并安装 `nginx`
@@ -35,7 +35,7 @@ sudo ./install.sh
 - `nginx -t` 校验后 reload Nginx
 
 启用 HTTPS 后，脚本默认让 Nginx 通过 `443` 对外提供访问，再反向代理到你设置的应用服务端口。
-如果 `443` 已被非 Nginx 进程占用，`install.sh` 会提示你输入一个新的 HTTPS 端口，最终访问地址会变成 `https://你的域名:端口`。
+如果 `443` 已被非 Nginx 进程占用，`install.sh` 会自动改用 `8443`；如果 `8443` 也被占用，脚本会直接报错退出。
 证书申请仍然通过 `80` 端口上的 `certbot --webroot` 完成，不依赖最终 HTTPS 监听端口。
 脚本会自动创建 ACME challenge 目录 `/var/www/shareroom-certbot/<domain>`，供 Let's Encrypt 校验使用。
 
@@ -67,11 +67,11 @@ npm run serve
 当前生产请求链路是：
 
 ```text
-浏览器 -> Nginx(443 或自定义 HTTPS 端口) -> ShareRoom(127.0.0.1:3002)
+浏览器 -> Nginx(443 或自动回退到 8443) -> ShareRoom(127.0.0.1:3002)
 ```
 
 也就是说：
-- 外部用户访问：`https://room.thanhthao.us.ci`（或 `https://room.thanhthao.us.ci:8443` 这类自定义 HTTPS 端口）
+- 外部用户访问：`https://room.thanhthao.us.ci`（若 443 被占用则改为 `https://room.thanhthao.us.ci:8443`）
 - ShareRoom 应用实际监听：`127.0.0.1:3002`
 
 ## 手动等价 Nginx 配置

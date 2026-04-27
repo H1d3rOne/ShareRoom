@@ -16,6 +16,7 @@ APP_PORT="3002"
 CONFIGURE_DOMAIN="n"
 USE_HTTPS="n"
 HTTPS_PORT="443"
+HTTPS_FALLBACK_PORT="8443"
 DOMAIN=""
 
 if [ "${EUID:-$(id -u)}" -eq 0 ]; then
@@ -181,32 +182,21 @@ select_https_port() {
     return 0
   fi
 
-  print_warning "检测到 443 已被非 Nginx 进程占用，请输入新的 HTTPS 端口"
+  print_warning "检测到 443 已被非 Nginx 进程占用，自动改用 8443"
   describe_port_usage 443
 
-  while true; do
-    local answer=""
-    read -r -p "请输入 HTTPS 端口: " answer
+  if [ "$APP_PORT" = "$HTTPS_FALLBACK_PORT" ]; then
+    print_error "应用服务端口不能与备用 HTTPS 端口 8443 相同"
+    exit 1
+  fi
 
-    if ! is_valid_port "$answer"; then
-      print_warning "请输入 1-65535 之间的有效端口"
-      continue
-    fi
+  if port_in_use "$HTTPS_FALLBACK_PORT"; then
+    print_error "443 已被占用，且 8443 也已被占用，请手动释放端口后重试"
+    describe_port_usage "$HTTPS_FALLBACK_PORT"
+    exit 1
+  fi
 
-    if [ "$answer" = "$APP_PORT" ]; then
-      print_warning "HTTPS 端口不能与应用服务端口相同"
-      continue
-    fi
-
-    if port_in_use "$answer"; then
-      print_warning "端口 $answer 已被占用，请重新输入"
-      describe_port_usage "$answer"
-      continue
-    fi
-
-    HTTPS_PORT="$answer"
-    return 0
-  done
+  HTTPS_PORT="$HTTPS_FALLBACK_PORT"
 }
 
 verify_https_listener() {
