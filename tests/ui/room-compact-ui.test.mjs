@@ -105,6 +105,12 @@ test('开发环境保留 socket 与 health 代理，但不再代理网页共享'
   assert.doesNotMatch(roomVue, /onMounted\(\(\) => \{[\s\S]*checkRemoteControlAgent\(\{ quiet: true \}\)/)
 })
 
+test('生产环境默认通过当前同源地址连接 socket，而不是强制直连 3002', () => {
+  assert.match(roomVue, /if \(window\.location\.port === '3001'\) \{[\s\S]*return window\.location\.origin[\s\S]*\}/)
+  assert.match(roomVue, /return window\.location\.origin/)
+  assert.doesNotMatch(roomVue, /return `\$\{protocol\}\/\/\$\{window\.location\.hostname\}:3002`/)
+})
+
 
 test('聊天输入区和成员区进一步紧凑化', () => {
   assert.match(roomVue, /\.chat-device-actions\s*\{[^}]*gap:\s*4px;/s)

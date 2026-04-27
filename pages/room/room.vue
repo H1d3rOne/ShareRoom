@@ -1715,8 +1715,7 @@ function resolveSignalServerUrl() {
   if (window.location.port === '3001') {
     return window.location.origin
   }
-  const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
-  return `${protocol}//${window.location.hostname}:3002`
+  return window.location.origin
 }
 
 function resolveRemoteControlAgentUrl() {
