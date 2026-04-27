@@ -15,6 +15,7 @@ ACME_WEBROOT_BASE="/var/www/shareroom-certbot"
 APP_PORT="3002"
 CONFIGURE_DOMAIN="n"
 USE_HTTPS="n"
+HTTPS_PORT="443"
 DOMAIN=""
 
 if [ "${EUID:-$(id -u)}" -eq 0 ]; then
@@ -112,6 +113,114 @@ is_ip_address() {
 is_valid_domain() {
   local value="$1"
   [[ "$value" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$ ]]
+}
+
+is_valid_port() {
+  local value="$1"
+  [[ "$value" =~ ^[0-9]+$ ]] && [ "$value" -ge 1 ] && [ "$value" -le 65535 ]
+}
+
+port_in_use() {
+  local port="$1"
+
+  if command -v ss >/dev/null 2>&1; then
+    $SUDO ss -tln | awk '{print $4}' | grep -Eq "(^|[\[\]:])${port}$"
+    return $?
+  fi
+
+  if command -v netstat >/dev/null 2>&1; then
+    $SUDO netstat -tln 2>/dev/null | awk '{print $4}' | grep -Eq "(^|[\[\]:])${port}$"
+    return $?
+  fi
+
+  print_error "未检测到 ss 或 netstat，无法检查端口占用"
+  exit 1
+}
+
+describe_port_usage() {
+  local port="$1"
+
+  if command -v ss >/dev/null 2>&1; then
+    $SUDO ss -tlnp | grep -E ":${port}( |$)" || true
+    return 0
+  fi
+
+  if command -v netstat >/dev/null 2>&1; then
+    $SUDO netstat -tlnp 2>/dev/null | grep -E ":${port}( |$)" || true
+    return 0
+  fi
+
+  print_warning "未检测到 ss 或 netstat，无法打印端口占用详情"
+}
+
+port_used_by_nginx() {
+  local port="$1"
+
+  if command -v ss >/dev/null 2>&1; then
+    $SUDO ss -tlnp | grep -E ":${port}( |$)" | grep -q nginx
+    return $?
+  fi
+
+  if command -v netstat >/dev/null 2>&1; then
+    $SUDO netstat -tlnp 2>/dev/null | grep -E ":${port}( |$)" | grep -q nginx
+    return $?
+  fi
+
+  return 1
+}
+
+select_https_port() {
+  HTTPS_PORT="443"
+
+  if ! port_in_use 443; then
+    return 0
+  fi
+
+  if port_used_by_nginx 443; then
+    print_success "检测到 443 已由 Nginx 监听，将继续复用 443"
+    return 0
+  fi
+
+  print_warning "检测到 443 已被非 Nginx 进程占用，请输入新的 HTTPS 端口"
+  describe_port_usage 443
+
+  while true; do
+    local answer=""
+    read -r -p "请输入 HTTPS 端口: " answer
+
+    if ! is_valid_port "$answer"; then
+      print_warning "请输入 1-65535 之间的有效端口"
+      continue
+    fi
+
+    if [ "$answer" = "$APP_PORT" ]; then
+      print_warning "HTTPS 端口不能与应用服务端口相同"
+      continue
+    fi
+
+    if port_in_use "$answer"; then
+      print_warning "端口 $answer 已被占用，请重新输入"
+      describe_port_usage "$answer"
+      continue
+    fi
+
+    HTTPS_PORT="$answer"
+    return 0
+  done
+}
+
+verify_https_listener() {
+  local use_https="$1"
+
+  if [ "$use_https" != "y" ]; then
+    return 0
+  fi
+
+  if ! port_used_by_nginx "$HTTPS_PORT"; then
+    print_error "HTTPS 端口 $HTTPS_PORT 未被 Nginx 监听，安装未完成"
+    describe_port_usage "$HTTPS_PORT"
+    exit 1
+  fi
 }
 
 ensure_command() {
@@ -337,7 +446,7 @@ server {
 }
 
 server {
-    listen 443 ssl http2;
+    listen $HTTPS_PORT ssl http2;
     server_name $domain;
     ssl_certificate $(fullchain_path "$domain");
     ssl_certificate_key $(privkey_path "$domain");
@@ -464,11 +573,16 @@ configure_nginx() {
   enable_nginx_site "$domain"
   reload_nginx_config
 
+  if [ "$use_https" = "y" ] && [ "$cert_ready" = "y" ]; then
+    verify_https_listener "$use_https"
+  fi
+
   if [ "$use_https" = "y" ] && [ "$cert_ready" != "y" ]; then
     request_https_certificate "$domain"
     write_nginx_site "$domain" "$app_port" "$use_https" "y"
     enable_nginx_site "$domain"
     reload_nginx_config
+    verify_https_listener "$use_https"
   fi
 
   print_success "Nginx 配置完成: $domain"
@@ -501,6 +615,10 @@ prompt_domain_configuration() {
     print_error "HTTPS 模式不支持直接使用 IP，请填写已解析到服务器的域名"
     exit 1
   fi
+
+  if [ "$USE_HTTPS" = "y" ]; then
+    select_https_port
+  fi
 }
 
 print_summary() {
@@ -519,8 +637,12 @@ print_summary() {
 
   if [ "$CONFIGURE_DOMAIN" = "y" ]; then
     if [ "$USE_HTTPS" = "y" ]; then
-      echo "部署访问地址: https://$DOMAIN"
-      echo "HTTPS 入口: Nginx 固定监听 443"
+      if [ "$HTTPS_PORT" = "443" ]; then
+        echo "部署访问地址: https://$DOMAIN"
+      else
+        echo "部署访问地址: https://$DOMAIN:$HTTPS_PORT"
+      fi
+      echo "HTTPS 监听端口: $HTTPS_PORT"
     else
       echo "部署访问地址: http://$DOMAIN"
     fi
