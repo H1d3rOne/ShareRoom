@@ -124,12 +124,12 @@ port_in_use() {
   local port="$1"
 
   if command -v ss >/dev/null 2>&1; then
-    $SUDO ss -tln | awk '{print $4}' | grep -Eq "(^|[\[\]:])${port}$"
+    $SUDO ss -H -tln "( sport = :${port} )" | grep -q .
     return $?
   fi
 
   if command -v netstat >/dev/null 2>&1; then
-    $SUDO netstat -tln 2>/dev/null | awk '{print $4}' | grep -Eq "(^|[\[\]:])${port}$"
+    $SUDO netstat -tln 2>/dev/null | awk -v target=":${port}" '$4 ~ (target "$") { found=1 } END { exit(found ? 0 : 1) }'
     return $?
   fi
 
@@ -141,12 +141,12 @@ describe_port_usage() {
   local port="$1"
 
   if command -v ss >/dev/null 2>&1; then
-    $SUDO ss -tlnp | grep -E ":${port}( |$)" || true
+    $SUDO ss -H -tlnp "( sport = :${port} )" || true
     return 0
   fi
 
   if command -v netstat >/dev/null 2>&1; then
-    $SUDO netstat -tlnp 2>/dev/null | grep -E ":${port}( |$)" || true
+    $SUDO netstat -tlnp 2>/dev/null | awk -v target=":${port}" '$4 ~ (target "$")'
     return 0
   fi
 
@@ -157,12 +157,12 @@ port_used_by_nginx() {
   local port="$1"
 
   if command -v ss >/dev/null 2>&1; then
-    $SUDO ss -tlnp | grep -E ":${port}( |$)" | grep -q nginx
+    $SUDO ss -H -tlnp "( sport = :${port} )" | grep -q nginx
     return $?
   fi
 
   if command -v netstat >/dev/null 2>&1; then
-    $SUDO netstat -tlnp 2>/dev/null | grep -E ":${port}( |$)" | grep -q nginx
+    $SUDO netstat -tlnp 2>/dev/null | awk -v target=":${port}" '$4 ~ (target "$")' | grep -q nginx
     return $?
   fi
 
