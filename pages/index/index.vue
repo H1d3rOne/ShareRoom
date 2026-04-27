@@ -1,142 +1,118 @@
 <template>
   <div class="container">
-    <div class="ambient ambient-left"></div>
-    <div class="ambient ambient-right"></div>
-    <div class="ambient ambient-top"></div>
-    <div class="ambient ambient-accent"></div>
+    <div class="ambient ambient-1"></div>
+    <div class="ambient ambient-2"></div>
+    <div class="ambient ambient-3"></div>
 
     <main class="landing">
-      <section class="hero-copy">
-        <div class="hero-badge-row">
-          <span class="eyebrow">ShareRoom</span>
-          <span class="hero-status">共享协作空间</span>
-        </div>
-
-        <h1 class="title">
-          <span class="title-line">共享、语音、远控</span>
-          <span class="title-line accent">与轻游戏</span>
-          <span class="title-line">同一房间</span>
+      <header class="hero">
+        <div class="hero-badge">ShareRoom</div>
+        <h1 class="hero-title">
+          <span>共享协作</span>
+          <span class="gradient">同一房间</span>
         </h1>
-        <p class="subtitle">
-          进入前确定你的身份。昵称和头像会贯穿聊天、视频、共享舞台与游戏席位，重新加入时自动沿用。
-        </p>
+        <p class="hero-sub">实时共享屏幕、视频与网页，语音对话、远控协作与轻游戏，一个房间搞定</p>
 
-        <div class="hero-metrics">
-          <article class="hero-point">
-            <div class="hero-point-icon blue">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="3"/><path d="m8 21 4-4 4 4"/></svg>
-            </div>
-            <strong>实时共享</strong>
-            <span>图片、视频、屏幕内容在房间内同步展示</span>
-          </article>
-          <article class="hero-point">
-            <div class="hero-point-icon rose">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            </div>
-            <strong>统一身份</strong>
-            <span>头像和昵称贯穿消息、成员区与游戏座位</span>
-          </article>
-          <article class="hero-point">
-            <div class="hero-point-icon orange">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
-            </div>
-            <strong>轻量娱乐</strong>
-            <span>五子棋等互动玩法直接在共享区域展开</span>
-          </article>
-          <article class="hero-point">
-            <div class="hero-point-icon gold">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-            </div>
-            <strong>资料记忆</strong>
-            <span>下次进入自动恢复上一次的房间身份</span>
-          </article>
-        </div>
-      </section>
-
-      <section class="profile-panel">
-        <div class="panel-head">
-          <div>
-            <span class="panel-kicker">Room Identity</span>
-            <h2 class="panel-title">设置房间身份</h2>
-          </div>
-          <span class="panel-badge">1 分钟</span>
-        </div>
-
-        <div class="profile-preview">
-          <UserAvatar :avatar-id="selectedAvatarId" :name="previewDisplayName" :size="72" />
-          <div class="profile-preview-copy">
-            <span class="preview-label">已选身份</span>
-            <strong>{{ previewDisplayName }}</strong>
-            <span>进入房间后，身份会出现在成员列表、消息与游戏座位</span>
+        <div class="cta-group">
+          <button class="cta-primary" @click="createRoom">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>创建房间</span>
+          </button>
+          <div class="cta-join">
+            <input
+              v-model="roomId"
+              class="room-input"
+              placeholder="输入房间号"
+              @keyup.enter="joinRoom"
+            />
+            <button class="cta-secondary" @click="joinRoom">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+              <span>加入</span>
+            </button>
           </div>
         </div>
+      </header>
 
-        <div class="field-group">
-          <label class="field-label" for="displayName">房间昵称</label>
+      <div class="identity-bar">
+        <div class="identity-left" @click="toggleAvatarDropdown">
+          <UserAvatar :avatar-id="selectedAvatarId" :name="previewDisplayName" :size="32" />
+          <span class="identity-name">{{ previewDisplayName }}</span>
+          <svg class="chevron" :class="{ open: showAvatarDropdown }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="identity-right">
           <input
-            id="displayName"
             v-model="displayName"
-            class="text-input"
+            class="name-input"
             maxlength="20"
-            placeholder="输入你的昵称"
+            placeholder="你的昵称"
             @blur="normalizeDraftProfile"
           />
-          <p class="field-helper">最多 20 个字符，显示在消息、成员列表和视频标签中</p>
         </div>
+      </div>
 
-        <div class="field-group">
-          <div class="field-row">
-            <div class="field-label">默认头像</div>
-            <span class="field-caption">选择更适合你风格的角色形象</span>
-          </div>
+      <Transition name="dropdown">
+        <div v-if="showAvatarDropdown" class="avatar-dropdown">
+          <div class="dropdown-header">选择头像</div>
           <div class="avatar-grid">
             <button
               v-for="preset in AVATAR_PRESETS"
               :key="preset.id"
               type="button"
-              class="avatar-option"
+              class="avatar-item"
               :class="{ active: selectedAvatarId === preset.id }"
-              @click="selectedAvatarId = preset.id"
+              @click="selectAvatar(preset.id)"
             >
-              <UserAvatar :avatar-id="preset.id" :name="preset.name" :size="52" />
+              <UserAvatar :avatar-id="preset.id" :name="preset.name" :size="40" />
               <span>{{ preset.name }}</span>
             </button>
           </div>
         </div>
+      </Transition>
 
-        <div class="action-panel">
-          <button class="btn create-btn" @click="createRoom">
-            <span>创建新房间</span>
-            <small>生成独立房间号，立即进入房间主舞台</small>
-          </button>
-
-          <div class="join-panel">
-            <div class="join-panel-header">
-              <div>
-                <label class="field-label" for="roomId">加入现有房间</label>
-                <p class="field-helper">输入房间 ID，沿用当前头像与昵称加入</p>
-              </div>
-              <span class="join-pill">Quick Join</span>
-            </div>
-            <div class="join-row">
-              <input
-                id="roomId"
-                v-model="roomId"
-                class="text-input room-input"
-                placeholder="例如 120301"
-                @keyup.enter="joinRoom"
-              />
-              <button class="btn join-btn" @click="joinRoom">加入房间</button>
-            </div>
+      <section class="features">
+        <article class="feat">
+          <div class="feat-icon blue">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="3"/><path d="m8 21 4-4 4 4"/></svg>
           </div>
-        </div>
+          <div>
+            <strong>实时共享</strong>
+            <p>图片、视频、屏幕、网页同步展示</p>
+          </div>
+        </article>
+        <article class="feat">
+          <div class="feat-icon rose">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div>
+            <strong>统一身份</strong>
+            <p>头像昵称贯穿聊天、成员与游戏</p>
+          </div>
+        </article>
+        <article class="feat">
+          <div class="feat-icon orange">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+          </div>
+          <div>
+            <strong>轻量娱乐</strong>
+            <p>五子棋等互动玩法在共享区域展开</p>
+          </div>
+        </article>
+        <article class="feat">
+          <div class="feat-icon gold">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          </div>
+          <div>
+            <strong>资料记忆</strong>
+            <p>下次进入自动恢复上次的房间身份</p>
+          </div>
+        </article>
       </section>
     </main>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import UserAvatar from '../../components/UserAvatar.vue'
 import { AVATAR_PRESETS, ensureStoredUserProfile, normalizeDisplayName, saveStoredUserProfile } from '../../utils/userProfile'
@@ -146,15 +122,30 @@ const roomId = ref('')
 const storedProfile = ensureStoredUserProfile()
 const displayName = ref(storedProfile.displayName)
 const selectedAvatarId = ref(storedProfile.avatarId)
+const showAvatarDropdown = ref(false)
 
 const previewDisplayName = computed(() => {
   const trimmed = `${displayName.value || ''}`.trim()
   return trimmed || storedProfile.displayName
 })
 
-const selectedAvatarPreset = computed(() => {
-  return AVATAR_PRESETS.find((item) => item.id === selectedAvatarId.value) || AVATAR_PRESETS[0]
-})
+function toggleAvatarDropdown() {
+  showAvatarDropdown.value = !showAvatarDropdown.value
+}
+
+function selectAvatar(id) {
+  selectedAvatarId.value = id
+  showAvatarDropdown.value = false
+}
+
+function handleClickOutside(e) {
+  if (showAvatarDropdown.value && !e.target.closest('.identity-bar') && !e.target.closest('.avatar-dropdown')) {
+    showAvatarDropdown.value = false
+  }
+}
+
+onMounted(() => document.addEventListener('click', handleClickOutside))
+onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 
 function normalizeDraftProfile() {
   displayName.value = normalizeDisplayName(displayName.value)
@@ -165,7 +156,6 @@ function persistProfile() {
     displayName: displayName.value,
     avatarId: selectedAvatarId.value
   })
-
   displayName.value = nextProfile.displayName
   selectedAvatarId.value = nextProfile.avatarId
   return nextProfile
@@ -174,11 +164,7 @@ function persistProfile() {
 const createRoom = () => {
   persistProfile()
   const newRoomId = Math.floor(Math.random() * 1000000).toString().padStart(6, '0')
-
-  router.push({
-    path: `/room/${newRoomId}`,
-    query: { isCreator: true }
-  })
+  router.push({ path: `/room/${newRoomId}`, query: { isCreator: true } })
 }
 
 const joinRoom = () => {
@@ -186,13 +172,8 @@ const joinRoom = () => {
     alert('请输入房间ID')
     return
   }
-
   persistProfile()
-
-  router.push({
-    path: `/room/${roomId.value.trim()}`,
-    query: { isCreator: false }
-  })
+  router.push({ path: `/room/${roomId.value.trim()}`, query: { isCreator: false } })
 }
 </script>
 
@@ -200,74 +181,64 @@ const joinRoom = () => {
 .container {
   position: relative;
   min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
   color: var(--text-primary);
-  padding: 40px 48px;
+  padding: 32px 24px;
 }
 
 .ambient {
   position: absolute;
   border-radius: 999px;
-  filter: blur(100px);
-  opacity: 0.35;
+  filter: blur(120px);
   pointer-events: none;
 }
 
-.ambient-left {
+.ambient-1 {
+  width: 500px;
+  height: 500px;
+  left: -10%;
+  top: -5%;
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.ambient-2 {
   width: 400px;
   height: 400px;
-  left: -100px;
-  top: 8%;
-  background: rgba(59, 130, 246, 0.2);
+  right: -8%;
+  bottom: -5%;
+  background: rgba(225, 29, 72, 0.1);
 }
 
-.ambient-right {
-  width: 360px;
-  height: 360px;
-  right: -80px;
-  bottom: 8%;
-  background: rgba(225, 29, 72, 0.14);
-}
-
-.ambient-top {
-  width: 280px;
-  height: 280px;
-  top: -80px;
-  left: 45%;
-  background: rgba(249, 115, 22, 0.1);
-}
-
-.ambient-accent {
-  width: 200px;
-  height: 200px;
-  bottom: 20%;
-  left: 30%;
-  background: rgba(202, 138, 4, 0.08);
+.ambient-3 {
+  width: 300px;
+  height: 300px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(124, 58, 237, 0.06);
 }
 
 .landing {
   position: relative;
   z-index: 1;
-  min-height: calc(100vh - 80px);
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(400px, 480px);
-  gap: 48px;
-  align-items: center;
-}
-
-.hero-copy {
-  max-width: 680px;
-}
-
-.hero-badge-row {
+  width: 100%;
+  max-width: 640px;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
 }
 
-.eyebrow {
-  padding: 8px 16px;
+.hero {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.hero-badge {
+  display: inline-block;
+  padding: 6px 16px;
   border-radius: 999px;
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(96, 165, 250, 0.15);
@@ -276,463 +247,388 @@ const joinRoom = () => {
   font-weight: 700;
   letter-spacing: 0.2em;
   text-transform: uppercase;
+  margin-bottom: 24px;
 }
 
-.hero-status {
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(167, 185, 210, 0.1);
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
-
-.title {
-  margin: 32px 0 0;
-  max-width: 680px;
+.hero-title {
   font-family: var(--font-display);
-  font-size: clamp(44px, 5.2vw, 72px);
-  line-height: 1.02;
+  font-size: clamp(40px, 7vw, 64px);
+  line-height: 1.05;
   letter-spacing: -0.04em;
   color: #ffffff;
+  margin: 0 0 20px;
 }
 
-.title-line {
+.hero-title span {
   display: block;
 }
 
-.title-line.accent {
+.hero-title .gradient {
   background: linear-gradient(135deg, #60a5fa, #a78bfa, #f0abfc);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-.subtitle {
-  max-width: 520px;
-  margin: 24px 0 0;
+.hero-sub {
+  max-width: 440px;
+  margin: 0 auto 36px;
   color: var(--text-secondary);
-  font-size: 17px;
-  line-height: 1.75;
-  letter-spacing: 0.01em;
+  font-size: 16px;
+  line-height: 1.7;
 }
 
-.hero-metrics {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 36px;
+.cta-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
 }
 
-.hero-point {
-  padding: 20px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(167, 185, 210, 0.08);
-  backdrop-filter: blur(16px);
-  transition: border-color 0.3s ease, background 0.3s ease, transform 0.3s ease;
-}
-
-.hero-point:hover {
-  border-color: rgba(167, 185, 210, 0.16);
-  background: rgba(255, 255, 255, 0.05);
-  transform: translateY(-2px);
-}
-
-.hero-point-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+.cta-primary {
+  width: 100%;
+  max-width: 360px;
+  min-height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 14px;
-}
-
-.hero-point-icon svg {
-  width: 18px;
-  height: 18px;
-}
-
-.hero-point-icon.blue {
-  background: rgba(59, 130, 246, 0.12);
-  color: #60a5fa;
-}
-
-.hero-point-icon.rose {
-  background: rgba(225, 29, 72, 0.1);
-  color: #fb7185;
-}
-
-.hero-point-icon.orange {
-  background: rgba(249, 115, 22, 0.1);
-  color: #fb923c;
-}
-
-.hero-point-icon.gold {
-  background: rgba(202, 138, 4, 0.1);
-  color: #fbbf24;
-}
-
-.hero-point strong {
-  display: block;
-  color: #f0f4f8;
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  letter-spacing: -0.01em;
-}
-
-.hero-point span {
-  color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1.65;
-}
-
-.profile-panel {
-  padding: 32px;
-  border-radius: 28px;
-  background: rgba(8, 15, 28, 0.6);
-  border: 1px solid rgba(167, 185, 210, 0.1);
-  backdrop-filter: blur(32px);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-    0 32px 64px rgba(0, 0, 0, 0.3);
-}
-
-.panel-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.panel-kicker {
-  display: block;
-  color: #fbbf24;
-  font-size: 11px;
+  gap: 10px;
+  border: none;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #fff;
+  font-size: 17px;
   font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 16px 48px rgba(37, 99, 235, 0.25);
+  transition: transform 0.2s ease, filter 0.2s ease, box-shadow 0.2s ease;
 }
 
-.panel-title {
-  margin-top: 8px;
-  font-family: var(--font-display);
-  font-size: 26px;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
-  color: #ffffff;
+.cta-primary svg {
+  width: 20px;
+  height: 20px;
 }
 
-.panel-badge {
-  flex: 0 0 auto;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(202, 138, 4, 0.1);
-  border: 1px solid rgba(202, 138, 4, 0.15);
-  color: #fbbf24;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+.cta-primary:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+  box-shadow: 0 20px 56px rgba(37, 99, 235, 0.3);
 }
 
-.profile-preview {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(167, 185, 210, 0.08);
+.cta-primary:active {
+  transform: translateY(0);
 }
 
-.preview-label {
-  display: inline-block;
-  margin-bottom: 6px;
-  color: #93c5fd;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.profile-preview-copy strong {
-  display: block;
-  color: #ffffff;
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.profile-preview-copy span:last-child {
-  display: block;
-  margin-top: 4px;
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.field-group {
-  margin-top: 20px;
-}
-
-.field-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.field-label {
-  display: block;
-  color: #c1cede;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.field-caption,
-.field-helper {
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.field-helper {
-  margin-top: 8px;
-}
-
-.text-input {
+.cta-join {
   width: 100%;
+  max-width: 360px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.room-input {
   min-height: 48px;
-  border: 1px solid rgba(167, 185, 210, 0.12);
+  border: 1px solid rgba(167, 185, 210, 0.14);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.04);
   color: #ffffff;
   padding: 0 16px;
   font-size: 15px;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
-.text-input:focus {
+.room-input:focus {
   outline: none;
   border-color: rgba(96, 165, 250, 0.4);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   background: rgba(255, 255, 255, 0.06);
 }
 
-.text-input::placeholder {
-  color: rgba(148, 163, 184, 0.5);
+.room-input::placeholder {
+  color: rgba(148, 163, 184, 0.45);
+}
+
+.cta-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 100px;
+  min-height: 48px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f97316, #e11d48);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 12px 32px rgba(225, 29, 72, 0.18);
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.cta-secondary svg {
+  width: 18px;
+  height: 18px;
+}
+
+.cta-secondary:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+.cta-secondary:active {
+  transform: translateY(0);
+}
+
+.identity-bar {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(167, 185, 210, 0.1);
+  margin-bottom: 4px;
+}
+
+.identity-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px 4px 4px;
+  border-radius: 10px;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.identity-left:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.identity-name {
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 600;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.chevron.open {
+  transform: rotate(180deg);
+}
+
+.identity-right {
+  flex: 1;
+  min-width: 0;
+}
+
+.name-input {
+  width: 100%;
+  min-height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+  padding: 0 12px;
+  font-size: 13px;
+  transition: background 0.2s ease;
+}
+
+.name-input:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.name-input::placeholder {
+  color: rgba(148, 163, 184, 0.4);
+}
+
+.avatar-dropdown {
+  width: 100%;
+  max-width: 360px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(8, 15, 28, 0.85);
+  border: 1px solid rgba(167, 185, 210, 0.12);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+  margin-bottom: 20px;
+}
+
+.dropdown-header {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
 }
 
 .avatar-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
-.avatar-option {
-  min-height: 100px;
-  border: 1px solid rgba(167, 185, 210, 0.08);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.02);
-  padding: 12px 8px;
+.avatar-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: var(--text-muted);
+  gap: 6px;
+  padding: 10px 4px;
+  border: 1px solid rgba(167, 185, 210, 0.06);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
-  transition: border-color 0.25s ease, background 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
 }
 
-.avatar-option:hover {
-  border-color: rgba(167, 185, 210, 0.18);
+.avatar-item:hover {
+  border-color: rgba(167, 185, 210, 0.15);
   background: rgba(255, 255, 255, 0.04);
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 
-.avatar-option.active {
+.avatar-item.active {
   border-color: rgba(96, 165, 250, 0.4);
   background: rgba(59, 130, 246, 0.06);
-  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.12), 0 12px 24px rgba(37, 99, 235, 0.08);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.1);
 }
 
-.avatar-option span {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.action-panel {
-  margin-top: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.join-panel {
-  padding: 16px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(167, 185, 210, 0.08);
-}
-
-.join-panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 14px;
-  margin-bottom: 12px;
-}
-
-.join-panel-header .field-helper {
-  margin-top: 4px;
-}
-
-.join-pill {
-  flex: 0 0 auto;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.12);
-  color: #93c5fd;
+.avatar-item span {
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.join-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-}
-
-.btn {
-  border: none;
-  border-radius: 14px;
-  padding: 14px 18px;
-  color: #fff;
-  cursor: pointer;
-  font-size: 15px;
   font-weight: 600;
-  transition: transform 0.25s ease, filter 0.25s ease, box-shadow 0.25s ease;
+  color: var(--text-muted);
 }
 
-.btn:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.06);
+.dropdown-enter-active,
+.dropdown-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-.btn:active {
-  transform: translateY(0);
+.dropdown-enter-from,
+.dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
-.create-btn {
-  min-height: 72px;
+.features {
+  width: 100%;
+  max-width: 560px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.feat {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(167, 185, 210, 0.06);
+  transition: border-color 0.25s ease, background 0.25s ease;
+}
+
+.feat:hover {
+  border-color: rgba(167, 185, 210, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.feat-icon {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  gap: 4px;
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
-  box-shadow: 0 16px 40px rgba(37, 99, 235, 0.2);
 }
 
-.create-btn span {
-  font-weight: 700;
-  letter-spacing: -0.01em;
+.feat-icon svg {
+  width: 16px;
+  height: 16px;
 }
 
-.create-btn small {
-  color: rgba(255, 255, 255, 0.75);
+.feat-icon.blue {
+  background: rgba(59, 130, 246, 0.1);
+  color: #60a5fa;
+}
+
+.feat-icon.rose {
+  background: rgba(225, 29, 72, 0.08);
+  color: #fb7185;
+}
+
+.feat-icon.orange {
+  background: rgba(249, 115, 22, 0.08);
+  color: #fb923c;
+}
+
+.feat-icon.gold {
+  background: rgba(202, 138, 4, 0.08);
+  color: #fbbf24;
+}
+
+.feat strong {
+  display: block;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.feat p {
+  color: var(--text-muted);
   font-size: 12px;
-  font-weight: 500;
-}
-
-.join-btn {
-  min-width: 120px;
-  background: linear-gradient(135deg, #f97316, #e11d48);
-  box-shadow: 0 12px 32px rgba(225, 29, 72, 0.16);
-  font-weight: 700;
-}
-
-.btn:focus-visible,
-.avatar-option:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-}
-
-@media (max-width: 1024px) {
-  .container {
-    padding: 24px;
-  }
-
-  .landing {
-    grid-template-columns: 1fr;
-    align-items: start;
-    gap: 32px;
-  }
-
-  .hero-copy {
-    max-width: none;
-  }
-}
-
-@media (max-width: 720px) {
-  .container {
-    padding: 16px;
-  }
-
-  .landing {
-    min-height: auto;
-    gap: 24px;
-  }
-
-  .hero-metrics,
-  .avatar-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .panel-head,
-  .field-row,
-  .join-panel-header {
-    flex-direction: column;
-  }
-
-  .profile-preview {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .join-row {
-    grid-template-columns: 1fr;
-  }
-
-  .join-btn {
-    width: 100%;
-  }
+  line-height: 1.55;
+  margin: 0;
 }
 
 @media (max-width: 560px) {
-  .title {
+  .container {
+    padding: 24px 16px;
+  }
+
+  .hero-title {
     font-size: 36px;
   }
 
-  .hero-metrics,
-  .avatar-grid {
+  .features {
     grid-template-columns: 1fr;
   }
 
-  .profile-panel {
-    padding: 20px;
+  .cta-primary,
+  .cta-join {
+    max-width: none;
+  }
+
+  .identity-bar {
+    max-width: none;
+  }
+
+  .avatar-dropdown {
+    max-width: none;
+  }
+
+  .avatar-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 </style>
