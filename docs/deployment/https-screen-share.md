@@ -93,10 +93,11 @@ server {
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
     server_name room.thanhthao.us.ci;
     ssl_certificate /etc/letsencrypt/live/room.thanhthao.us.ci/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/room.thanhthao.us.ci/privkey.pem;
+    http2 on;
 
     location / {
         proxy_pass http://127.0.0.1:3002;
@@ -120,6 +121,8 @@ server {
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+如果你的 Nginx 版本较旧，不支持 `http2 on;`，可改回旧写法 `listen 443 ssl http2;`。
 
 如果证书还未签发，再执行：
 

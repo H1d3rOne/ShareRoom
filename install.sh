@@ -170,6 +170,42 @@ port_used_by_nginx() {
   return 1
 }
 
+nginx_version_supports_modern_http2() {
+  local nginx_version
+
+  if ! command -v nginx >/dev/null 2>&1; then
+    return 1
+  fi
+
+  nginx_version=$(nginx -v 2>&1 | sed -n 's#.*nginx/##p' | head -n 1)
+  if [ -z "$nginx_version" ]; then
+    return 1
+  fi
+
+  if command -v sort >/dev/null 2>&1; then
+    [ "$(printf '1.25.1
+%s
+' "$nginx_version" | sort -V | head -n 1)" = "1.25.1" ]
+    return $?
+  fi
+
+  return 1
+}
+
+render_https_listen_block() {
+  if nginx_version_supports_modern_http2; then
+    cat <<BLOCK
+    listen $HTTPS_PORT ssl;
+    http2 on;
+BLOCK
+    return 0
+  fi
+
+  cat <<BLOCK
+    listen $HTTPS_PORT ssl http2;
+BLOCK
+}
+
 select_https_port() {
   HTTPS_PORT="443"
 
@@ -447,7 +483,7 @@ server {
 }
 
 server {
-    listen $HTTPS_PORT ssl http2;
+$(render_https_listen_block)
     server_name $domain;
     ssl_certificate $(fullchain_path "$domain");
     ssl_certificate_key $(privkey_path "$domain");
