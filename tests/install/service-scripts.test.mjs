@@ -11,6 +11,8 @@ const stopScript = fs.existsSync(stopScriptPath) ? fs.readFileSync(stopScriptPat
 const uninstallScriptPath = new URL('../../uninstall.sh', import.meta.url)
 const uninstallScript = fs.existsSync(uninstallScriptPath) ? fs.readFileSync(uninstallScriptPath, 'utf8') : ''
 const httpsGuide = fs.readFileSync(new URL('../../docs/deployment/https-screen-share.md', import.meta.url), 'utf8')
+const livekitGuidePath = new URL('../../docs/deployment/livekit-realtime-share.md', import.meta.url)
+const livekitGuide = fs.existsSync(livekitGuidePath) ? fs.readFileSync(livekitGuidePath, 'utf8') : ''
 
 test('package.json 暴露 start.sh / stop.sh / uninstall.sh 服务脚本', () => {
   assert.equal(pkg.scripts?.['start-all'], './start.sh')
@@ -64,4 +66,13 @@ test('uninstall.sh 支持一键回滚 ShareRoom Nginx 站点配置且不影响�
   assert.match(uninstallScript, /rm -rf "\$RUN_DIR"/)
   assert.doesNotMatch(uninstallScript, /purge -y caddy/)
   assert.doesNotMatch(uninstallScript, /systemctl stop nginx/)
+})
+
+
+test('启动脚本透传 LiveKit 环境变量，并提供实时共享部署文档', () => {
+  assert.match(startScript, /export LIVEKIT_URL LIVEKIT_API_KEY LIVEKIT_API_SECRET/)
+  assert.match(startDevScript, /export LIVEKIT_URL LIVEKIT_API_KEY LIVEKIT_API_SECRET/)
+  assert.match(livekitGuide, /LIVEKIT_URL=/)
+  assert.match(livekitGuide, /LIVEKIT_API_KEY=/)
+  assert.match(livekitGuide, /LIVEKIT_API_SECRET=/)
 })

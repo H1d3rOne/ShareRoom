@@ -1099,6 +1099,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { useRoute, useRouter } from 'vue-router'
 import { io } from 'socket.io-client'
 import UserAvatar from '../../components/UserAvatar.vue'
+import { createLivekitShareSession } from '../../utils/livekitSession.js'
 import { DEFAULT_AVATAR_ID, ensureStoredUserProfile, resolveAvatarId } from '../../utils/userProfile'
 
 const route = useRoute()
@@ -1147,6 +1148,9 @@ const sharedOutgoingStream = ref(null)
 const sharedIncomingStream = ref(null)
 const remoteControlTargetId = ref('')
 const remoteControlAgentStatus = ref('unknown')
+const livekitPublisherSession = createLivekitShareSession()
+const livekitSubscriberSession = createLivekitShareSession()
+const realtimeShareConfig = reactive({ loaded: false, enabled: false, url: '', message: '' })
 const showGameMenu = ref(false)
 const gameInvite = ref(null)
 const activeGame = ref(null)
@@ -2904,6 +2908,9 @@ function syncSharedVideoElementSource() {
 }
 
 function resetSharedVideoTransport() {
+  livekitPublisherSession.disconnect().catch(() => {})
+  livekitSubscriberSession.disconnect().catch(() => {})
+
   Object.keys(sharedTrackSenders).forEach((peerId) => {
     const senders = Object.values(sharedTrackSenders[peerId] || {})
     senders.forEach((sender) => {
@@ -3451,6 +3458,78 @@ function startFileShare(file, kind) {
   })
 }
 
+
+async function fetchRealtimeShareConfig() {
+  if (realtimeShareConfig.loaded) {
+    return realtimeShareConfig
+  }
+
+  try {
+    const response = await fetch('/api/realtime-share/config')
+    const payload = await response.json()
+    realtimeShareConfig.loaded = true
+    realtimeShareConfig.enabled = Boolean(payload.enabled)
+    realtimeShareConfig.url = payload.url || ''
+    realtimeShareConfig.message = payload.message || ''
+  } catch (error) {
+    realtimeShareConfig.loaded = true
+    realtimeShareConfig.enabled = false
+    realtimeShareConfig.url = ''
+    realtimeShareConfig.message = error?.message || 'LiveKit 配置读取失败'
+  }
+
+  return realtimeShareConfig
+}
+
+async function requestRealtimeShareToken({ canPublish = false, canSubscribe = true } = {}) {
+  const response = await fetch('/api/realtime-share/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      roomId: roomId.value,
+      participantId: selfId.value || clientId,
+      participantName: displayName.value,
+      canPublish,
+      canSubscribe
+    })
+  })
+
+  const payload = await response.json()
+  if (!response.ok) {
+    throw new Error(payload?.message || 'LiveKit token 获取失败')
+  }
+
+  return payload
+}
+
+async function connectIncomingLivekitShare(media) {
+  const livekitRoomName = media?.livekitRoomName || roomId.value
+  if (!livekitRoomName) {
+    return
+  }
+
+  try {
+    await livekitSubscriberSession.disconnect()
+    const tokenPayload = await requestRealtimeShareToken({ canPublish: false, canSubscribe: true })
+    await livekitSubscriberSession.connectSubscriber({
+      url: tokenPayload.url,
+      token: tokenPayload.token,
+      onTrack: (track) => {
+        const mediaTrack = track?.mediaStreamTrack || track
+        if (!mediaTrack || mediaTrack.kind !== 'video') {
+          return
+        }
+        sharedIncomingStream.value = new MediaStream([mediaTrack])
+        nextTick(() => {
+          syncSharedVideoElementSource()
+        })
+      }
+    })
+  } catch (error) {
+    console.error('接入 LiveKit 共享失败:', error)
+  }
+}
+
 function startRealtimeVideoShare(file) {
   const shareId = createId('share_')
   const url = URL.createObjectURL(file)
@@ -3487,7 +3566,11 @@ function startRealtimeVideoShare(file) {
   pushSystemMessage(`你开始实时共享视频 ${file.name}`)
 }
 
-async function startScreenShare() {
+async function startBrowserTabShare() {
+  return startScreenShare('browser')
+}
+
+async function startScreenShare(sourceType = 'screen') {
   if (!window.isSecureContext) {
     alert('当前页面不是安全上下文，请通过 https:// 域名访问后再使用屏幕共享')
     return
@@ -3506,9 +3589,11 @@ async function startScreenShare() {
   try {
     const stream = await navigator.mediaDevices.getDisplayMedia({
       video: true,
-      audio: true
+      audio: sourceType !== 'browser'
     })
     const shareId = createId('share_')
+    const shareLabel = sourceType === 'browser' ? '网页画面共享' : '屏幕共享'
+    const realtimeConfig = await fetchRealtimeShareConfig()
 
     clearActiveShare()
 
@@ -3528,10 +3613,26 @@ async function startScreenShare() {
     hasShownRemoteAgentHint = false
     remoteControlAgentStatus.value = 'unknown'
 
+    let deliveryMode = 'stream'
+    let livekitRoomName = ''
+    let livekitTrackSid = ''
+
+    if (realtimeConfig.enabled) {
+      const tokenPayload = await requestRealtimeShareToken({ canPublish: true, canSubscribe: true })
+      const publishResult = await livekitPublisherSession.connectPublisher({
+        url: tokenPayload.url,
+        token: tokenPayload.token,
+        stream
+      })
+      deliveryMode = 'livekit'
+      livekitRoomName = roomId.value
+      livekitTrackSid = publishResult.trackSid || ''
+    }
+
     updateActiveShare({
       id: shareId,
       kind: 'screen',
-      fileName: '屏幕共享',
+      fileName: shareLabel,
       fileType: 'screen/stream',
       fileSize: 0,
       ownerId: selfId.value,
@@ -3540,8 +3641,12 @@ async function startScreenShare() {
       isReceiving: false,
       progress: 100,
       zoomed: false,
-      deliveryMode: 'stream',
+      deliveryMode,
       streamId: stream.id,
+      sourceType,
+      livekitRoomName,
+      livekitTrackSid,
+      shareLabel,
       pointer: null,
       controllerId: selfId.value,
       sync: null
@@ -3552,22 +3657,28 @@ async function startScreenShare() {
       media: {
         id: shareId,
         kind: 'screen',
-        fileName: '屏幕共享',
+        fileName: shareLabel,
         fileType: 'screen/stream',
         fileSize: 0,
-        deliveryMode: 'stream',
-        streamId: stream.id
+        deliveryMode,
+        streamId: stream.id,
+        sourceType,
+        livekitRoomName: roomId.value,
+        livekitTrackSid,
+        shareLabel
       }
     })
 
     await nextTick()
     syncSharedVideoElementSource()
 
-    Object.keys(peerConnections).forEach((peerId) => {
-      attachSharedStreamToPeer(peerId)
-    })
+    if (deliveryMode === 'stream') {
+      Object.keys(peerConnections).forEach((peerId) => {
+        attachSharedStreamToPeer(peerId)
+      })
+    }
 
-    pushSystemMessage('你开始了屏幕共享')
+    pushSystemMessage(`你开始了${shareLabel}`)
   } catch (error) {
     if (error?.name === 'NotAllowedError') {
       alert('你已取消屏幕共享授权')
@@ -4588,6 +4699,9 @@ function connectSocket() {
 
   socket.value.on('share-started', ({ media }) => {
     openIncomingShare(media)
+    if (media?.deliveryMode === 'livekit' && media.ownerId !== selfId.value) {
+      connectIncomingLivekitShare(media)
+    }
     pushSystemMessage(`${media.ownerName} 共享了${getShareKindLabel(media.kind)} ${media.fileName}`)
     requestShareSync(media.id)
   })

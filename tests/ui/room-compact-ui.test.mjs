@@ -144,7 +144,7 @@ test('共享区权限与视频控制按管理员全局/成员本地分层', () =
 })
 
 test('屏幕共享会区分 HTTPS 安全上下文、浏览器能力和用户取消授权', () => {
-  assert.match(roomVue, /async function startScreenShare\(\) \{[\s\S]*if \(!window\.isSecureContext\) \{[\s\S]*alert\('当前页面不是安全上下文，请通过 https:\/\/ 域名访问后再使用屏幕共享'\)/)
+  assert.match(roomVue, /async function startScreenShare\(sourceType = 'screen'\) \{[\s\S]*if \(!window\.isSecureContext\) \{[\s\S]*alert\('当前页面不是安全上下文，请通过 https:\/\/ 域名访问后再使用屏幕共享'\)/)
   assert.match(roomVue, /if \(!navigator\.mediaDevices\?\.getDisplayMedia\) \{[\s\S]*alert\('当前浏览器或运行环境不支持网页屏幕共享，请使用最新版桌面 Chrome、Edge 或 Safari，并通过 HTTPS 访问'\)/)
   assert.match(roomVue, /if \(error\?\.name === 'NotAllowedError'\) \{[\s\S]*alert\('你已取消屏幕共享授权'\)[\s\S]*return/)
 })

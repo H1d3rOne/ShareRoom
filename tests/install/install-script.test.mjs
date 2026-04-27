@@ -65,3 +65,10 @@ test('HTTPS 部署文档说明 install.sh 使用 certbot webroot 配置 Nginx', 
   assert.doesNotMatch(httpsGuide, /certbot --nginx -d/)
   assert.doesNotMatch(httpsGuide, /Caddy（无需 Nginx）/)
 })
+
+
+test('install.sh 提示可选配置 LiveKit 环境变量', () => {
+  assert.match(installScript, /LIVEKIT_URL/)
+  assert.match(installScript, /LIVEKIT_API_KEY/)
+  assert.match(installScript, /LIVEKIT_API_SECRET/)
+})

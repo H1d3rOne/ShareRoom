@@ -3,8 +3,11 @@ const fs = require('fs')
 const http = require('http')
 const path = require('path')
 const { Server } = require('socket.io')
+const { getLiveKitConfig } = require('./livekit/config')
+const { createRealtimeShareToken } = require('./livekit/token')
 
 const app = express()
+app.use(express.json({ limit: '1mb' }))
 const server = http.createServer(app)
 const io = new Server(server, {
   cors: {
@@ -1015,6 +1018,24 @@ app.all('/webpage-proxy', (req, res) => {
   res.status(404).json({ error: 'webpage proxy removed' })
 })
 
+app.get('/api/realtime-share/config', (req, res) => {
+  const config = getLiveKitConfig()
+  res.json({
+    enabled: config.enabled,
+    url: config.enabled ? config.url : '',
+    message: config.message
+  })
+})
+
+app.post('/api/realtime-share/token', async (req, res) => {
+  const payload = await createRealtimeShareToken(req.body || {})
+  if (!payload.enabled) {
+    return res.status(503).json(payload)
+  }
+
+  res.json(payload)
+})
+
 if (hasDistBuild) {
   app.use(express.static(distPath))
   app.get('/{*path}', (req, res) => {
@@ -1880,6 +1901,10 @@ io.on('connection', (socket) => {
       fileSize: Number(payload.media.fileSize) || 0,
       deliveryMode: payload.media.deliveryMode || (kind === 'video' ? 'stream' : 'file'),
       streamId: payload.media.streamId || null,
+      sourceType: payload.media.sourceType || '',
+      livekitRoomName: payload.media.livekitRoomName || '',
+      livekitTrackSid: payload.media.livekitTrackSid || '',
+      shareLabel: payload.media.shareLabel || '',
       duration: Number(payload.media.duration) || 0,
       ownerId: socket.id,
       ownerName: session.userName,
