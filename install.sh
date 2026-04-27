@@ -216,11 +216,16 @@ verify_https_listener() {
     return 0
   fi
 
-  if ! port_used_by_nginx "$HTTPS_PORT"; then
-    print_error "HTTPS 端口 $HTTPS_PORT 未被 Nginx 监听，安装未完成"
-    describe_port_usage "$HTTPS_PORT"
-    exit 1
-  fi
+  for attempt in $(seq 1 10); do
+    if port_used_by_nginx "$HTTPS_PORT"; then
+      return 0
+    fi
+    sleep 0.2
+  done
+
+  print_error "HTTPS 端口 $HTTPS_PORT 未被 Nginx 监听，安装未完成"
+  describe_port_usage "$HTTPS_PORT"
+  exit 1
 }
 
 ensure_command() {
