@@ -98,7 +98,17 @@
                     <div class="panel-title">{{ activeGame ? getGameTypeLabel(activeGame.gameType) : '游戏菜单' }}</div>
                     <p v-if="!activeGame" class="game-panel-subtitle">{{ gamePanelSubtitle }}</p>
                   </div>
-                  <div class="game-panel-status">{{ gamePanelStatus }}</div>
+                  <div class="game-panel-tools">
+                    <div class="game-panel-status">{{ gamePanelStatus }}</div>
+                    <button type="button" class="ghost-btn stage-fullscreen-btn" title="全屏" @click.stop="toggleSharedStageFullscreen">
+                      <svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <polyline points="15 3 21 3 21 9"/>
+                        <polyline points="9 21 3 21 3 15"/>
+                        <line x1="21" y1="3" x2="14" y2="10"/>
+                        <line x1="3" y1="21" x2="10" y2="14"/>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
 
                 <div class="game-launcher-grid" v-if="showGameCatalog">
@@ -763,11 +773,6 @@
 
             <div v-if="activeShare.kind !== 'webpage'" class="share-footer">
               <div class="share-meta">
-                <div class="share-name">{{ activeShare.fileName }}</div>
-                <div class="share-subtitle">
-                  <span>{{ formatBytes(activeShare.fileSize) }}</span>
-                  <span>{{ shareStatusText }}</span>
-                </div>
                 <div v-if="activeShare.kind === 'video'" class="video-control-panel">
                   <button
                     class="control-pill playback-btn"
@@ -833,6 +838,15 @@
               <div class="share-actions">
                 <button v-if="activeShare.kind === 'image' && canManageSharedMedia" class="ghost-btn" @click="toggleSharedImageZoom">
                   {{ activeShare.zoomed ? '还原' : '放大' }}
+                </button>
+                <button v-if="activeShare.kind !== 'video'" class="ghost-btn stage-fullscreen-btn" @click="toggleSharedStageFullscreen">
+                  <svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <polyline points="15 3 21 3 21 9"/>
+                    <polyline points="9 21 3 21 3 15"/>
+                    <line x1="21" y1="3" x2="14" y2="10"/>
+                    <line x1="3" y1="21" x2="10" y2="14"/>
+                  </svg>
+                  <span>全屏</span>
                 </button>
               </div>
             </div>
@@ -1824,6 +1838,18 @@ function transferKey(peerId, mediaId) {
   return `${peerId}:${mediaId}`
 }
 
+function hasParticipant(peerId) {
+  return participants.value.some((peer) => peer.id === peerId)
+}
+
+function hasIncompleteIncomingTransfer(peerId, mediaId = activeShare.value?.id) {
+  if (!peerId || !mediaId) {
+    return false
+  }
+
+  return Boolean(incomingTransfers[transferKey(peerId, mediaId)])
+}
+
 function getParticipantName(peerId) {
   return participants.value.find((peer) => peer.id === peerId)?.name || '房间成员'
 }
@@ -1946,7 +1972,7 @@ function toggleSharedVideoMute() {
   }
 }
 
-function toggleSharedVideoFullscreen() {
+function toggleSharedStageFullscreen() {
   const stage = sharedStageRef.value
   if (!stage) return
 
@@ -1957,6 +1983,10 @@ function toggleSharedVideoFullscreen() {
       pushSystemMessage('全屏模式不可用')
     })
   }
+}
+
+function toggleSharedVideoFullscreen() {
+  toggleSharedStageFullscreen()
 }
 
 function toggleSharedWebpageFullscreen() {
@@ -3713,15 +3743,31 @@ async function handleDataChannelMessage(peerId, rawData) {
   await handleIncomingShareChunk(peerId, header.mediaId, header.index, buffer)
 }
 
+function isExpectedDataChannelAbortError(error, channel) {
+  if (channel?.__expectedClose) {
+    return true
+  }
+
+  const detail = [
+    error?.error?.message,
+    error?.error?.reason,
+    error?.message,
+    error?.reason
+  ].filter(Boolean).join(' ')
+
+  return /User-Initiated Abort|Close called/i.test(detail)
+}
+
 function registerDataChannel(peerId, channel) {
   channel.binaryType = 'arraybuffer'
+  channel.__expectedClose = false
   dataChannels[peerId] = channel
 
   channel.onopen = () => {
     dataChannels[peerId] = channel
     if (activeShare.value?.ownerId === selfId.value) {
       ensureShareDelivery(peerId)
-    } else if (activeShare.value?.ownerId === peerId && !activeShare.value.url) {
+    } else if (activeShare.value?.ownerId === peerId && (!activeShare.value.url || hasIncompleteIncomingTransfer(peerId, activeShare.value.id))) {
       requestShareSync(activeShare.value.id)
     }
   }
@@ -3731,12 +3777,26 @@ function registerDataChannel(peerId, channel) {
   }
 
   channel.onclose = () => {
+    const expectedClose = Boolean(channel.__expectedClose)
     if (dataChannels[peerId] === channel) {
       delete dataChannels[peerId]
+    }
+
+    if (!expectedClose && activeShare.value?.ownerId === peerId && hasIncompleteIncomingTransfer(peerId, activeShare.value.id)) {
+      requestShareSync(activeShare.value.id)
+    }
+
+    const pc = peerConnections[peerId]
+    if (!expectedClose && !dataChannels[peerId] && shouldCreateInitialDataChannel(peerId) && hasParticipant(peerId) && pc && pc.signalingState !== 'closed' && pc.connectionState !== 'closed') {
+      ensureDataChannel(peerId, pc)
     }
   }
 
   channel.onerror = (error) => {
+    if (isExpectedDataChannelAbortError(error, channel)) {
+      return
+    }
+
     console.error('数据通道错误:', error)
   }
 }
@@ -3973,6 +4033,7 @@ function cleanupPeerConnection(peerId) {
   const channel = dataChannels[peerId]
   if (channel) {
     try {
+      channel.__expectedClose = true
       channel.close()
     } catch (error) {
       console.error('关闭数据通道失败:', error)
@@ -6084,26 +6145,7 @@ onUnmounted(() => {
   flex: 1 1 auto;
 }
 
-.share-name {
-  font-size: 18px;
-  font-weight: 600;
-  color: #ffffff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.share-subtitle {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 8px;
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
 .video-control-panel {
-  margin-top: 12px;
   display: grid;
   grid-template-columns: clamp(40px, 3vw, 52px) clamp(40px, 3vw, 52px) minmax(0, 1fr) auto clamp(40px, 3vw, 52px);
   align-items: center;
@@ -6208,7 +6250,17 @@ onUnmounted(() => {
 
 .share-actions {
   display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: clamp(10px, 1vw, 14px);
+}
+
+.stage-fullscreen-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .share-close-drawer {
@@ -6494,6 +6546,13 @@ onUnmounted(() => {
   color: #dbeafe;
   font-size: 12px;
   font-weight: 700;
+}
+
+.game-panel-tools {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .game-launcher-grid {
