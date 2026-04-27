@@ -1162,6 +1162,7 @@ const isSettingRemoteAnswerPending = reactive({})
 const incomingTransfers = reactive({})
 const pendingBinaryHeaders = reactive({})
 const outboundDeliveries = reactive({})
+const localTrackSenders = reactive({})
 const sharedTrackSenders = reactive({})
 const pendingSharedNegotiations = reactive({})
 const sharedVideoUi = reactive({
@@ -2608,20 +2609,12 @@ function syncSharedVideoElementSource() {
 
 function resetSharedVideoTransport() {
   Object.keys(sharedTrackSenders).forEach((peerId) => {
-    const pc = peerConnections[peerId]
-    const senders = sharedTrackSenders[peerId] || []
-
-    if (pc) {
-      senders.forEach((sender) => {
-        try {
-          pc.removeTrack(sender)
-        } catch (error) {
-          console.error('移除共享视频轨道失败:', error)
-        }
+    const senders = Object.values(sharedTrackSenders[peerId] || {})
+    senders.forEach((sender) => {
+      sender?.replaceTrack(null).catch((error) => {
+        console.error('清空共享视频轨道失败:', error)
       })
-    }
-
-    delete sharedTrackSenders[peerId]
+    })
   })
 
   if (sharedOutgoingStream.value) {
@@ -2968,6 +2961,17 @@ function removeLocalTrack(kind) {
   updateLocalMediaFlags()
 }
 
+function ensurePeerSenderCache(store, peerId) {
+  if (!store[peerId]) {
+    store[peerId] = {
+      audio: null,
+      video: null
+    }
+  }
+
+  return store[peerId]
+}
+
 async function enableLocalTrack(kind) {
   const constraintKey = kind === 'audio' ? 'audio' : 'video'
 
@@ -3033,21 +3037,31 @@ function attachSharedStreamToPeer(peerId, options = {}) {
     return
   }
 
-  const existingSenders = sharedTrackSenders[peerId] || []
-  if (!existingSenders.length) {
-    sharedTrackSenders[peerId] = stream.getTracks().map((track) => pc.addTrack(track, stream))
-  } else {
-    existingSenders.forEach((sender) => {
-      const nextTrack = stream.getTracks().find((track) => track.kind === sender.track?.kind) || null
-      if (nextTrack && sender.track !== nextTrack) {
+  const senderCache = sharedTrackSenders[peerId] || ensurePeerSenderCache(sharedTrackSenders, peerId)
+  const tracksByKind = stream.getTracks().reduce((result, track) => {
+    result[track.kind] = track
+    return result
+  }, {})
+
+  ;['audio', 'video'].forEach((kind) => {
+    const nextTrack = tracksByKind[kind] || null
+    const sender = senderCache[kind]
+
+    if (sender) {
+      if (sender.track !== nextTrack) {
         sender.replaceTrack(nextTrack).catch((error) => {
           console.error('替换共享流轨道失败:', error)
         })
       }
-    })
-  }
+      return
+    }
 
-  if (forceNegotiation || sharedTrackSenders[peerId]?.length) {
+    if (nextTrack) {
+      senderCache[kind] = pc.addTrack(nextTrack, stream)
+    }
+  })
+
+  if (forceNegotiation || sharedTrackSenders[peerId]?.audio || sharedTrackSenders[peerId]?.video) {
     queueSharedNegotiation(peerId)
   }
 }
@@ -3679,36 +3693,46 @@ function syncLocalTracksToPeer(peerId) {
   const pc = peerConnections[peerId]
   const stream = localMediaStream.value
 
-  if (!pc || !stream) {
-    return
-  }
-
-  const senders = pc.getSenders()
-  const sharedSenders = sharedTrackSenders[peerId] || []
-  stream.getTracks().forEach((track) => {
-    const sender = senders.find((item) => item.track?.kind === track.kind && !sharedSenders.includes(item))
-    if (sender) {
-      sender.replaceTrack(track)
-      return
-    }
-    pc.addTrack(track, stream)
-  })
-}
-
-function detachLocalTracksFromPeer(peerId) {
-  const pc = peerConnections[peerId]
   if (!pc) {
     return
   }
 
-  const sharedSenders = sharedTrackSenders[peerId] || []
-  pc.getSenders().forEach((sender) => {
-    if (sender.track && ['audio', 'video'].includes(sender.track.kind) && !sharedSenders.includes(sender)) {
-      try {
-        pc.removeTrack(sender)
-      } catch (error) {
-        console.error('移除本地轨道失败:', error)
+  const senderCache = localTrackSenders[peerId] || ensurePeerSenderCache(localTrackSenders, peerId)
+  const tracksByKind = (stream?.getTracks() || []).reduce((result, track) => {
+    result[track.kind] = track
+    return result
+  }, {})
+
+  ;['audio', 'video'].forEach((kind) => {
+    const track = tracksByKind[kind] || null
+    const sender = senderCache[kind]
+
+    if (sender) {
+      if (sender.track !== track) {
+        sender.replaceTrack(track).catch((error) => {
+          console.error('同步本地轨道失败:', error)
+        })
       }
+      return
+    }
+
+    if (track) {
+      senderCache[kind] = pc.addTrack(track, stream)
+    }
+  })
+}
+
+function detachLocalTracksFromPeer(peerId) {
+  const senderCache = localTrackSenders[peerId]
+  if (!senderCache) {
+    return
+  }
+
+  Object.values(senderCache).forEach((sender) => {
+    if (sender) {
+      sender.replaceTrack(null).catch((error) => {
+        console.error('清空本地轨道失败:', error)
+      })
     }
   })
 }
@@ -3906,6 +3930,7 @@ function cleanupPeerConnection(peerId) {
   delete remoteStreams[peerId]
   delete remoteVideoElements[peerId]
   delete peerStreamCatalog[peerId]
+  delete localTrackSenders[peerId]
   delete sharedTrackSenders[peerId]
   delete makingOffer[peerId]
   delete ignoreOffer[peerId]

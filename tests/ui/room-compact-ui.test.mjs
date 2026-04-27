@@ -224,3 +224,12 @@ test('超级管理员可撤销普通管理员，普通成员仍仅本地控制',
   assert.match(roomVue, /alert\('仅房主可以共享文件'\)/)
   assert.match(roomVue, /if \(!canGlobalControlShare\.value && sharedVideoLocalPaused\.value\) \{/)
 })
+
+test('WebRTC 重协商会复用本地与共享 sender，避免 m-line 顺序漂移', () => {
+  assert.match(roomVue, /const localTrackSenders = reactive\(\{\}\)/)
+  assert.match(roomVue, /function syncLocalTracksToPeer\(peerId\) \{[\s\S]*localTrackSenders\[peerId\][\s\S]*replaceTrack\(track\)/)
+  assert.match(roomVue, /function detachLocalTracksFromPeer\(peerId\) \{[\s\S]*replaceTrack\(null\)/)
+  assert.doesNotMatch(roomVue, /function detachLocalTracksFromPeer\(peerId\) \{[\s\S]*pc\.removeTrack\(sender\)/)
+  assert.match(roomVue, /function attachSharedStreamToPeer\(peerId, options = \{\}\) \{[\s\S]*sharedTrackSenders\[peerId\][\s\S]*replaceTrack\(nextTrack\)/)
+  assert.match(roomVue, /function resetSharedVideoTransport\(\) \{[\s\S]*replaceTrack\(null\)/)
+})
