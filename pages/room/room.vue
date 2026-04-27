@@ -1099,6 +1099,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { useRoute, useRouter } from 'vue-router'
 import { io } from 'socket.io-client'
 import UserAvatar from '../../components/UserAvatar.vue'
+import { createLivekitShareSession } from '../../utils/livekitSession.js'
 import { DEFAULT_AVATAR_ID, ensureStoredUserProfile, resolveAvatarId } from '../../utils/userProfile'
 
 const route = useRoute()
@@ -1147,6 +1148,8 @@ const sharedOutgoingStream = ref(null)
 const sharedIncomingStream = ref(null)
 const remoteControlTargetId = ref('')
 const remoteControlAgentStatus = ref('unknown')
+const livekitPublisherSession = createLivekitShareSession()
+const livekitSubscriberSession = createLivekitShareSession()
 const showGameMenu = ref(false)
 const gameInvite = ref(null)
 const activeGame = ref(null)
