@@ -3159,9 +3159,10 @@ function pickPrimaryPeerStream(peerId) {
     && activeShare.value.ownerId === peerId
     && isStreamShare(activeShare.value)
   ) {
-    return streams.find((stream) => stream.id !== activeShare.value.streamId && isLiveStreamCandidate(stream))
-      || streams.find((stream) => isLiveStreamCandidate(stream))
-      || null
+    return streams.find((stream) => (
+      stream.id !== (sharedIncomingStream.value?.id || activeShare.value.streamId)
+      && isLiveStreamCandidate(stream)
+    )) || null
   }
 
   return streams.find((stream) => isLiveStreamCandidate(stream)) || streams[0]
@@ -5517,13 +5518,16 @@ function emitShareControl(action, extra = {}) {
 
   if (activeShare.value.kind === 'video') {
     const video = sharedVideoRef.value
+    const controllerId = isStreamShare(activeShare.value) && activeShare.value.ownerId !== selfId.value
+      ? activeShare.value.ownerId
+      : selfId.value
     payload.currentTime = extra.currentTime ?? video?.currentTime ?? 0
     payload.playing = extra.playing ?? Boolean(video && !video.paused && !video.ended)
     payload.duration = extra.duration ?? Number(video?.duration || activeShare.value.sync?.duration || 0)
     payload.muted = extra.muted ?? sharedVideoMuted.value
 
     updateActiveShare({
-      controllerId: selfId.value,
+      controllerId,
       sync: {
         action,
         currentTime: payload.currentTime,
@@ -5531,7 +5535,7 @@ function emitShareControl(action, extra = {}) {
         duration: payload.duration,
         muted: payload.muted,
         updatedAt: Date.now(),
-        controllerId: selfId.value
+        controllerId
       }
     })
     syncSharedVideoUiFromState(activeShare.value.sync)

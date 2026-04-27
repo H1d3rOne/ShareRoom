@@ -1977,13 +1977,15 @@ io.on('connection', (socket) => {
           ? payload.muted
           : room.sharedMedia.sync?.muted ?? true,
         updatedAt: Date.now(),
-        controllerId: socket.id
+        controllerId: room.sharedMedia.deliveryMode === 'stream' && room.sharedMedia.ownerId
+          ? room.sharedMedia.ownerId
+          : socket.id
       }
       room.sharedMedia.sync = sync
       room.sharedMedia.duration = sync.duration
     }
 
-    socket.to(payload.roomId).emit('share-control', {
+    io.to(payload.roomId).emit('share-control', {
       mediaId: payload.mediaId,
       senderId: socket.id,
       senderName: session.userName,
