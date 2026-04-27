@@ -4300,7 +4300,7 @@ function cleanupSession() {
 
 function connectSocket() {
   socket.value = io(SIGNAL_SERVER_URL, {
-    transports: ['websocket']
+    transports: ['polling', 'websocket']
   })
 
   socket.value.on('connect', () => {
