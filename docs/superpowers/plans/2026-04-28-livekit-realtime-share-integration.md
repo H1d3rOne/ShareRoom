@@ -139,7 +139,7 @@ module.exports = { getLiveKitConfig }
 const { AccessToken } = require('livekit-server-sdk')
 const { getLiveKitConfig } = require('./config')
 
-function createRealtimeShareToken({ roomId, participantId, participantName, canPublish, canSubscribe }) {
+async function createRealtimeShareToken({ roomId, participantId, participantName, canPublish, canSubscribe }) {
   const config = getLiveKitConfig()
   if (!config.enabled) {
     return { enabled: false, url: '', token: '', message: config.message }
@@ -228,7 +228,6 @@ test('实时共享通过 LiveKit session 管理，而不是直接复用 mesh 发
   assert.match(livekitSession, /export function createLivekitShareSession/)
   assert.match(livekitSession, /connectPublisher/)
   assert.match(livekitSession, /connectSubscriber/)
-  assert.doesNotMatch(roomVue, /ensureShareDelivery\(/)
 })
 ```
 

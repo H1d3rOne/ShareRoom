@@ -55,7 +55,18 @@ test('视频播放地址支持 HTTP Range 请求', async (t) => {
   const server = await startServer(port)
   t.after(async () => { await stopServer(server) })
 
-  const response = await fetch(`http://127.0.0.1:${port}/api/shares/video/test-share`, {
+  const form = new FormData()
+  form.set('roomId', 'vod-room-2')
+  form.set('ownerId', 'socket-owner')
+  form.set('file', new Blob(['fake-video-range'], { type: 'video/mp4' }), 'range.mp4')
+
+  const uploadResponse = await fetch(`http://127.0.0.1:${port}/api/shares/video/upload`, {
+    method: 'POST',
+    body: form
+  })
+  const uploadPayload = await uploadResponse.json()
+
+  const response = await fetch(`http://127.0.0.1:${port}${uploadPayload.playbackUrl}`, {
     headers: { range: 'bytes=0-3' }
   })
 
