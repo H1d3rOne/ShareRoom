@@ -3,80 +3,52 @@
     <div class="ambient ambient-left"></div>
     <div class="ambient ambient-right"></div>
     <div class="ambient ambient-top"></div>
+    <div class="ambient ambient-accent"></div>
 
     <main class="landing">
       <section class="hero-copy">
         <div class="hero-badge-row">
-          <p class="eyebrow">ShareRoom</p>
+          <span class="eyebrow">ShareRoom</span>
           <span class="hero-status">共享协作空间</span>
         </div>
 
-        <h1 class="title">把共享、语音、远控和轻游戏，放进同一个房间。</h1>
+        <h1 class="title">
+          <span class="title-line">共享、语音、远控</span>
+          <span class="title-line accent">与轻游戏</span>
+          <span class="title-line">同一房间</span>
+        </h1>
         <p class="subtitle">
-          进入前先确定你的身份。昵称和头像会同步到聊天、视频、共享舞台和游戏席位里，重新加入时也会自动沿用。
+          进入前确定你的身份。昵称和头像会贯穿聊天、视频、共享舞台与游戏席位，重新加入时自动沿用。
         </p>
 
         <div class="hero-metrics">
           <article class="hero-point">
+            <div class="hero-point-icon blue">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="3"/><path d="m8 21 4-4 4 4"/></svg>
+            </div>
             <strong>实时共享</strong>
-            <span>图片、视频、屏幕内容在房间内同步展示，适合边聊边看。</span>
+            <span>图片、视频、屏幕内容在房间内同步展示</span>
           </article>
           <article class="hero-point">
+            <div class="hero-point-icon rose">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
             <strong>统一身份</strong>
-            <span>头像和昵称会贯穿消息、成员区、视频流与游戏座位。</span>
+            <span>头像和昵称贯穿消息、成员区与游戏座位</span>
           </article>
           <article class="hero-point">
+            <div class="hero-point-icon orange">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+            </div>
             <strong>轻量娱乐</strong>
-            <span>五子棋、斗地主等互动玩法直接在共享区域展开。</span>
+            <span>五子棋等互动玩法直接在共享区域展开</span>
           </article>
           <article class="hero-point">
+            <div class="hero-point-icon gold">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            </div>
             <strong>资料记忆</strong>
-            <span>下次进入时，自动恢复你上一次使用的房间身份。</span>
-          </article>
-        </div>
-
-        <div class="showcase-grid">
-          <article class="showcase-card identity-card">
-            <span class="card-kicker">当前身份</span>
-            <div class="identity-main">
-              <UserAvatar :avatar-id="selectedAvatarId" :name="previewDisplayName" :size="84" />
-              <div class="identity-copy">
-                <strong>{{ previewDisplayName }}</strong>
-                <span>{{ selectedAvatarPreset.name }} 头像风格</span>
-              </div>
-            </div>
-            <div class="identity-tags">
-              <span class="identity-tag">消息展示</span>
-              <span class="identity-tag">视频标签</span>
-              <span class="identity-tag">游戏席位</span>
-            </div>
-          </article>
-
-          <article class="showcase-card feature-card">
-            <span class="card-kicker">房间体验</span>
-            <div class="feature-list">
-              <div class="feature-item">
-                <span class="feature-dot blue"></span>
-                <div>
-                  <strong>共享舞台</strong>
-                  <p>共享内容、远程指针和房间内游戏统一在主舞台区域呈现。</p>
-                </div>
-              </div>
-              <div class="feature-item">
-                <span class="feature-dot rose"></span>
-                <div>
-                  <strong>一体化沟通</strong>
-                  <p>消息输入旁边直接控制麦克风、听筒和摄像头，交互路径更短。</p>
-                </div>
-              </div>
-              <div class="feature-item">
-                <span class="feature-dot orange"></span>
-                <div>
-                  <strong>房间内对战</strong>
-                  <p>邀请成员即可开局，游戏结束后可从共享区域即时关闭窗口。</p>
-                </div>
-              </div>
-            </div>
+            <span>下次进入自动恢复上一次的房间身份</span>
           </article>
         </div>
       </section>
@@ -85,27 +57,17 @@
         <div class="panel-head">
           <div>
             <span class="panel-kicker">Room Identity</span>
-            <h2 class="panel-title">设置你的房间身份</h2>
+            <h2 class="panel-title">设置房间身份</h2>
           </div>
-          <span class="panel-badge">1 分钟完成</span>
+          <span class="panel-badge">1 分钟</span>
         </div>
 
         <div class="profile-preview">
-          <UserAvatar :avatar-id="selectedAvatarId" :name="previewDisplayName" :size="96" />
+          <UserAvatar :avatar-id="selectedAvatarId" :name="previewDisplayName" :size="72" />
           <div class="profile-preview-copy">
             <span class="preview-label">已选身份</span>
             <strong>{{ previewDisplayName }}</strong>
-            <span>进入房间后，这个身份会出现在成员列表、消息与游戏座位里。</span>
-          </div>
-          <div class="preview-stack" aria-hidden="true">
-            <span
-              v-for="preset in AVATAR_PRESETS.slice(0, 4)"
-              :key="preset.id"
-              class="preview-stack-item"
-              :class="{ active: preset.id === selectedAvatarId }"
-            >
-              <UserAvatar :avatar-id="preset.id" :name="preset.name" :size="34" />
-            </span>
+            <span>进入房间后，身份会出现在成员列表、消息与游戏座位</span>
           </div>
         </div>
 
@@ -119,7 +81,7 @@
             placeholder="输入你的昵称"
             @blur="normalizeDraftProfile"
           />
-          <p class="field-helper">最多 20 个字符，会显示在消息、成员列表和视频标签中。</p>
+          <p class="field-helper">最多 20 个字符，显示在消息、成员列表和视频标签中</p>
         </div>
 
         <div class="field-group">
@@ -136,7 +98,7 @@
               :class="{ active: selectedAvatarId === preset.id }"
               @click="selectedAvatarId = preset.id"
             >
-              <UserAvatar :avatar-id="preset.id" :name="preset.name" :size="60" />
+              <UserAvatar :avatar-id="preset.id" :name="preset.name" :size="52" />
               <span>{{ preset.name }}</span>
             </button>
           </div>
@@ -152,7 +114,7 @@
             <div class="join-panel-header">
               <div>
                 <label class="field-label" for="roomId">加入现有房间</label>
-                <p class="field-helper">输入房间 ID，沿用当前头像与昵称加入。</p>
+                <p class="field-helper">输入房间 ID，沿用当前头像与昵称加入</p>
               </div>
               <span class="join-pill">Quick Join</span>
             </div>
@@ -240,48 +202,56 @@ const joinRoom = () => {
   min-height: 100vh;
   overflow: hidden;
   color: var(--text-primary);
-  padding: 32px;
+  padding: 40px 48px;
 }
 
 .ambient {
   position: absolute;
   border-radius: 999px;
-  filter: blur(72px);
-  opacity: 0.44;
+  filter: blur(100px);
+  opacity: 0.35;
   pointer-events: none;
 }
 
 .ambient-left {
-  width: 320px;
-  height: 320px;
-  left: -72px;
-  top: 10%;
-  background: rgba(59, 130, 246, 0.22);
+  width: 400px;
+  height: 400px;
+  left: -100px;
+  top: 8%;
+  background: rgba(59, 130, 246, 0.2);
 }
 
 .ambient-right {
   width: 360px;
   height: 360px;
-  right: -120px;
-  bottom: 5%;
-  background: rgba(225, 29, 72, 0.18);
+  right: -80px;
+  bottom: 8%;
+  background: rgba(225, 29, 72, 0.14);
 }
 
 .ambient-top {
-  width: 240px;
-  height: 240px;
-  top: -60px;
-  left: 48%;
-  background: rgba(249, 115, 22, 0.14);
+  width: 280px;
+  height: 280px;
+  top: -80px;
+  left: 45%;
+  background: rgba(249, 115, 22, 0.1);
+}
+
+.ambient-accent {
+  width: 200px;
+  height: 200px;
+  bottom: 20%;
+  left: 30%;
+  background: rgba(202, 138, 4, 0.08);
 }
 
 .landing {
   position: relative;
   z-index: 1;
-  min-height: calc(100vh - 64px);
+  min-height: calc(100vh - 80px);
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(380px, 500px);
-  gap: 28px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(400px, 480px);
+  gap: 48px;
   align-items: center;
 }
 
@@ -293,205 +263,143 @@ const joinRoom = () => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .eyebrow {
-  margin: 0;
-  padding: 10px 14px;
+  padding: 8px 16px;
   border-radius: 999px;
-  background: rgba(59, 130, 246, 0.14);
-  border: 1px solid rgba(96, 165, 250, 0.2);
-  color: #dbeafe;
-  font-size: 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.15);
+  color: #93c5fd;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.24em;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
 }
 
 .hero-status {
-  padding: 10px 14px;
+  padding: 8px 14px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(167, 185, 210, 0.14);
-  color: var(--text-secondary);
-  font-size: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(167, 185, 210, 0.1);
+  color: var(--text-muted);
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
 .title {
-  margin: 24px 0 0;
-  max-width: 760px;
-  color: #ffffff;
+  margin: 32px 0 0;
+  max-width: 680px;
   font-family: var(--font-display);
-  font-size: clamp(42px, 5vw, 74px);
-  line-height: 0.96;
-  letter-spacing: -0.05em;
+  font-size: clamp(44px, 5.2vw, 72px);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  color: #ffffff;
+}
+
+.title-line {
+  display: block;
+}
+
+.title-line.accent {
+  background: linear-gradient(135deg, #60a5fa, #a78bfa, #f0abfc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .subtitle {
-  max-width: 590px;
-  margin: 22px 0 0;
+  max-width: 520px;
+  margin: 24px 0 0;
   color: var(--text-secondary);
-  font-size: 18px;
-  line-height: 1.7;
+  font-size: 17px;
+  line-height: 1.75;
+  letter-spacing: 0.01em;
 }
 
 .hero-metrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 34px;
+  gap: 12px;
+  margin-top: 36px;
 }
 
 .hero-point {
-  min-height: 116px;
   padding: 20px;
-  border-radius: 24px;
-  background: linear-gradient(180deg, rgba(7, 14, 25, 0.88), rgba(12, 22, 38, 0.72));
-  border: 1px solid rgba(167, 185, 210, 0.12);
-  backdrop-filter: blur(20px);
-  box-shadow: var(--shadow-soft);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(167, 185, 210, 0.08);
+  backdrop-filter: blur(16px);
+  transition: border-color 0.3s ease, background 0.3s ease, transform 0.3s ease;
+}
+
+.hero-point:hover {
+  border-color: rgba(167, 185, 210, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-2px);
+}
+
+.hero-point-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.hero-point-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.hero-point-icon.blue {
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+}
+
+.hero-point-icon.rose {
+  background: rgba(225, 29, 72, 0.1);
+  color: #fb7185;
+}
+
+.hero-point-icon.orange {
+  background: rgba(249, 115, 22, 0.1);
+  color: #fb923c;
+}
+
+.hero-point-icon.gold {
+  background: rgba(202, 138, 4, 0.1);
+  color: #fbbf24;
 }
 
 .hero-point strong {
   display: block;
-  color: #ffffff;
-  font-size: 16px;
-  margin-bottom: 10px;
+  color: #f0f4f8;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
 }
 
 .hero-point span {
   color: var(--text-muted);
-  font-size: 14px;
-  line-height: 1.7;
-}
-
-.showcase-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.06fr);
-  gap: 16px;
-  margin-top: 20px;
-}
-
-.showcase-card {
-  padding: 22px;
-  border-radius: 28px;
-  border: 1px solid rgba(167, 185, 210, 0.14);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03)),
-    rgba(7, 14, 25, 0.72);
-  box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(20px);
-}
-
-.card-kicker {
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.identity-main {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  margin-top: 18px;
-}
-
-.identity-copy strong {
-  display: block;
-  color: #ffffff;
-  font-size: 24px;
-  line-height: 1.08;
-}
-
-.identity-copy span {
-  display: block;
-  margin-top: 8px;
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-
-.identity-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.identity-tag {
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(59, 130, 246, 0.12);
-  color: #dbeafe;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.feature-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-top: 18px;
-}
-
-.feature-item {
-  display: grid;
-  grid-template-columns: 12px minmax(0, 1fr);
-  gap: 14px;
-  align-items: flex-start;
-}
-
-.feature-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  margin-top: 7px;
-  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.04);
-}
-
-.feature-dot.blue {
-  background: #60a5fa;
-}
-
-.feature-dot.rose {
-  background: #fb7185;
-}
-
-.feature-dot.orange {
-  background: #fb923c;
-}
-
-.feature-item strong {
-  display: block;
-  color: #ffffff;
-  font-size: 15px;
-}
-
-.feature-item p {
-  margin-top: 6px;
-  color: var(--text-muted);
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: 13px;
+  line-height: 1.65;
 }
 
 .profile-panel {
-  padding: 28px;
-  border-radius: 32px;
-  background:
-    radial-gradient(circle at top right, rgba(225, 29, 72, 0.12), transparent 30%),
-    linear-gradient(180deg, rgba(8, 15, 28, 0.9), rgba(10, 20, 36, 0.78));
-  border: 1px solid rgba(167, 185, 210, 0.14);
-  backdrop-filter: blur(24px);
-  box-shadow: var(--shadow-strong);
+  padding: 32px;
+  border-radius: 28px;
+  background: rgba(8, 15, 28, 0.6);
+  border: 1px solid rgba(167, 185, 210, 0.1);
+  backdrop-filter: blur(32px);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 32px 64px rgba(0, 0, 0, 0.3);
 }
 
 .panel-head {
@@ -499,94 +407,77 @@ const joinRoom = () => {
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  margin-bottom: 22px;
+  margin-bottom: 24px;
 }
 
 .panel-kicker {
   display: block;
-  color: #fb7185;
-  font-size: 12px;
+  color: #fbbf24;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 
 .panel-title {
-  margin-top: 10px;
+  margin-top: 8px;
   font-family: var(--font-display);
-  font-size: 30px;
-  line-height: 1.02;
-  letter-spacing: -0.04em;
+  font-size: 26px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: #ffffff;
 }
 
 .panel-badge {
   flex: 0 0 auto;
-  padding: 9px 12px;
+  padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(249, 115, 22, 0.14);
-  color: #fed7aa;
-  font-size: 12px;
+  background: rgba(202, 138, 4, 0.1);
+  border: 1px solid rgba(202, 138, 4, 0.15);
+  color: #fbbf24;
+  font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .profile-preview {
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 18px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(167, 185, 210, 0.12);
+  gap: 16px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(167, 185, 210, 0.08);
 }
 
 .preview-label {
-  display: inline-flex;
-  margin-bottom: 10px;
-  color: #dbeafe;
-  font-size: 11px;
+  display: inline-block;
+  margin-bottom: 6px;
+  color: #93c5fd;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .profile-preview-copy strong {
   display: block;
   color: #ffffff;
-  font-size: 24px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .profile-preview-copy span:last-child {
   display: block;
-  margin-top: 8px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.preview-stack {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-}
-
-.preview-stack-item {
-  display: inline-flex;
-  padding: 4px;
-  margin-left: -8px;
-  border-radius: 999px;
-  background: rgba(8, 15, 28, 0.9);
-  border: 1px solid rgba(167, 185, 210, 0.1);
-  transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
-}
-
-.preview-stack-item.active {
-  transform: translateY(-4px);
-  border-color: rgba(96, 165, 250, 0.36);
-  box-shadow: 0 16px 28px rgba(37, 99, 235, 0.16);
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .field-group {
-  margin-top: 22px;
+  margin-top: 20px;
 }
 
 .field-row {
@@ -599,96 +490,98 @@ const joinRoom = () => {
 
 .field-label {
   display: block;
-  color: #dbeafe;
+  color: #c1cede;
   font-size: 13px;
   font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .field-caption,
 .field-helper {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
 .field-helper {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .text-input {
   width: 100%;
-  min-height: 54px;
-  border: 1px solid rgba(167, 185, 210, 0.18);
-  border-radius: 18px;
-  background: rgba(7, 14, 25, 0.58);
+  min-height: 48px;
+  border: 1px solid rgba(167, 185, 210, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
   color: #ffffff;
   padding: 0 16px;
   font-size: 15px;
-  transition: border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease, transform 0.22s ease;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
 }
 
 .text-input:focus {
   outline: none;
-  border-color: rgba(96, 165, 250, 0.52);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
-  background: rgba(11, 20, 34, 0.88);
-  transform: translateY(-1px);
+  border-color: rgba(96, 165, 250, 0.4);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.text-input::placeholder {
+  color: rgba(148, 163, 184, 0.5);
 }
 
 .avatar-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .avatar-option {
-  min-height: 122px;
-  border: 1px solid rgba(167, 185, 210, 0.14);
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(7, 14, 25, 0.66), rgba(15, 23, 42, 0.44));
-  padding: 14px 10px;
+  min-height: 100px;
+  border: 1px solid rgba(167, 185, 210, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 12px 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  color: var(--text-secondary);
+  gap: 8px;
+  color: var(--text-muted);
   cursor: pointer;
-  transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+  transition: border-color 0.25s ease, background 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
 }
 
 .avatar-option:hover {
-  transform: translateY(-3px);
-  border-color: rgba(96, 165, 250, 0.26);
-  background: linear-gradient(180deg, rgba(8, 15, 28, 0.82), rgba(19, 30, 50, 0.62));
-  box-shadow: 0 20px 36px rgba(2, 8, 23, 0.22);
+  border-color: rgba(167, 185, 210, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  transform: translateY(-2px);
 }
 
 .avatar-option.active {
-  border-color: rgba(96, 165, 250, 0.54);
-  background:
-    radial-gradient(circle at top, rgba(96, 165, 250, 0.16), transparent 50%),
-    rgba(10, 19, 34, 0.86);
-  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.18), 0 18px 34px rgba(37, 99, 235, 0.14);
+  border-color: rgba(96, 165, 250, 0.4);
+  background: rgba(59, 130, 246, 0.06);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.12), 0 12px 24px rgba(37, 99, 235, 0.08);
 }
 
 .avatar-option span {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .action-panel {
-  margin-top: 26px;
+  margin-top: 24px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .join-panel {
-  padding: 18px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(167, 185, 210, 0.12);
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(167, 185, 210, 0.08);
 }
 
 .join-panel-header {
@@ -696,21 +589,24 @@ const joinRoom = () => {
   justify-content: space-between;
   align-items: flex-start;
   gap: 14px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .join-panel-header .field-helper {
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 .join-pill {
   flex: 0 0 auto;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-radius: 999px;
-  background: rgba(59, 130, 246, 0.14);
-  color: #dbeafe;
-  font-size: 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.12);
+  color: #93c5fd;
+  font-size: 10px;
   font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .join-row {
@@ -721,77 +617,83 @@ const joinRoom = () => {
 
 .btn {
   border: none;
-  border-radius: 18px;
-  padding: 15px 18px;
+  border-radius: 14px;
+  padding: 14px 18px;
   color: #fff;
   cursor: pointer;
   font-size: 15px;
   font-weight: 600;
-  transition: transform 0.22s ease, filter 0.22s ease, box-shadow 0.22s ease;
+  transition: transform 0.25s ease, filter 0.25s ease, box-shadow 0.25s ease;
 }
 
 .btn:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.04);
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+.btn:active {
+  transform: translateY(0);
 }
 
 .create-btn {
-  min-height: 82px;
+  min-height: 72px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   background: linear-gradient(135deg, #2563eb, #7c3aed);
-  box-shadow: 0 24px 48px rgba(37, 99, 235, 0.26);
+  box-shadow: 0 16px 40px rgba(37, 99, 235, 0.2);
 }
 
-.create-btn span,
-.join-btn {
+.create-btn span {
   font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .create-btn small {
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
   font-weight: 500;
 }
 
 .join-btn {
-  min-width: 132px;
+  min-width: 120px;
   background: linear-gradient(135deg, #f97316, #e11d48);
-  box-shadow: 0 20px 42px rgba(225, 29, 72, 0.22);
+  box-shadow: 0 12px 32px rgba(225, 29, 72, 0.16);
+  font-weight: 700;
 }
 
 .btn:focus-visible,
 .avatar-option:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.24);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
 }
 
 @media (max-width: 1024px) {
+  .container {
+    padding: 24px;
+  }
+
   .landing {
     grid-template-columns: 1fr;
     align-items: start;
+    gap: 32px;
   }
 
   .hero-copy {
     max-width: none;
   }
-
-  .showcase-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 720px) {
   .container {
-    padding: 18px;
+    padding: 16px;
   }
 
   .landing {
     min-height: auto;
-    gap: 20px;
+    gap: 24px;
   }
 
   .hero-metrics,
@@ -810,10 +712,6 @@ const joinRoom = () => {
     align-items: flex-start;
   }
 
-  .preview-stack {
-    margin-left: 0;
-  }
-
   .join-row {
     grid-template-columns: 1fr;
   }
@@ -825,7 +723,7 @@ const joinRoom = () => {
 
 @media (max-width: 560px) {
   .title {
-    font-size: 38px;
+    font-size: 36px;
   }
 
   .hero-metrics,
@@ -833,7 +731,6 @@ const joinRoom = () => {
     grid-template-columns: 1fr;
   }
 
-  .showcase-card,
   .profile-panel {
     padding: 20px;
   }
