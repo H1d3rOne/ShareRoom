@@ -10,6 +10,11 @@ NC="\033[0m"
 PROJECT_ROOT=$(cd "$(dirname "$0")" && pwd)
 backend_pid=""
 
+LIVEKIT_URL="${LIVEKIT_URL:-}"
+LIVEKIT_API_KEY="${LIVEKIT_API_KEY:-}"
+LIVEKIT_API_SECRET="${LIVEKIT_API_SECRET:-}"
+export LIVEKIT_URL LIVEKIT_API_KEY LIVEKIT_API_SECRET
+
 print_success() {
   echo -e "${GREEN}$1${NC}"
 }
