@@ -35,7 +35,7 @@ sudo ./install.sh
 - `nginx -t` 校验后 reload Nginx
 
 启用 HTTPS 后，脚本默认让 Nginx 通过 `443` 对外提供访问，再反向代理到你设置的应用服务端口。
-如果 `443` 已被非 Nginx 进程占用，`install.sh` 会自动改用 `8443`；如果 `8443` 也被占用，脚本会直接报错退出。
+如果 `443` 已被非 Nginx 进程占用，`install.sh` 会自动尝试改用 `8443`；若 `8443` 已由 Nginx 监听则会直接复用，若 `8443` 被其他进程占用则脚本会直接报错退出。
 证书申请仍然通过 `80` 端口上的 `certbot --webroot` 完成，不依赖最终 HTTPS 监听端口。
 脚本会自动创建 ACME challenge 目录 `/var/www/shareroom-certbot/<domain>`，供 Let's Encrypt 校验使用。
 

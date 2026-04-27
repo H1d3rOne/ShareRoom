@@ -191,6 +191,12 @@ select_https_port() {
   fi
 
   if port_in_use "$HTTPS_FALLBACK_PORT"; then
+    if port_used_by_nginx "$HTTPS_FALLBACK_PORT"; then
+      print_success "检测到 8443 已由 Nginx 监听，将继续复用 8443"
+      HTTPS_PORT="$HTTPS_FALLBACK_PORT"
+      return 0
+    fi
+
     print_error "443 已被占用，且 8443 也已被占用，请手动释放端口后重试"
     describe_port_usage "$HTTPS_FALLBACK_PORT"
     exit 1
