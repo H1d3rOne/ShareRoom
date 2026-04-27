@@ -2122,7 +2122,6 @@ async function playSharedVideoSafely(options = {}) {
       video.muted = true
       sharedVideoMuted.value = true
       sharedVideoUi.muted = true
-      sharedVideoHasLocalMuteOverride.value = true
       return video.play()
         .then(() => true)
         .catch((retryError) => handleSharedVideoPlayError(retryError, { source, silentAbort: true }))
@@ -2287,6 +2286,12 @@ function restartIncomingStreamHealthMonitor() {
 
     const frameCount = Number(video.getVideoPlaybackQuality?.().totalVideoFrames || video.webkitDecodedFrameCount || 0)
     const currentTime = Number(video.currentTime || 0)
+    if (!share.sync?.playing) {
+      incomingStreamHealth.lastFrameCount = frameCount
+      incomingStreamHealth.lastCurrentTime = currentTime
+      incomingStreamHealth.lastProgressAt = Date.now()
+      return
+    }
     const advanced = frameCount > incomingStreamHealth.lastFrameCount || currentTime > incomingStreamHealth.lastCurrentTime + 0.12
 
     if (advanced) {
@@ -5606,6 +5611,14 @@ function applyVideoSync(sync, forceSeek = false) {
 
 function handleSharedVideoLoaded() {
   markIncomingStreamHealthy()
+  if (
+    activeShare.value?.kind === 'video'
+    && activeShare.value.ownerId === selfId.value
+    && isStreamShare(activeShare.value)
+    && !sharedOutgoingStream.value
+  ) {
+    initializeOwnedSharedVideoStream()
+  }
   if (sharedVideoRef.value && !shouldUseSyncedVideoUi()) {
     sharedVideoUi.duration = getResolvedSharedVideoDuration(activeShare.value?.sync)
     sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
@@ -5619,6 +5632,14 @@ function handleSharedVideoLoaded() {
 
 function handleSharedVideoCanPlay() {
   markIncomingStreamHealthy()
+  if (
+    activeShare.value?.kind === 'video'
+    && activeShare.value.ownerId === selfId.value
+    && isStreamShare(activeShare.value)
+    && !sharedOutgoingStream.value
+  ) {
+    initializeOwnedSharedVideoStream()
+  }
   if (sharedVideoRef.value && !shouldUseSyncedVideoUi()) {
     sharedVideoUi.duration = getResolvedSharedVideoDuration(activeShare.value?.sync)
     sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
