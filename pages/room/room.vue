@@ -2009,13 +2009,13 @@ function handleSharedVideoPlayError(error, options = {}) {
 }
 
 async function playSharedVideoSafely(options = {}) {
-  const { source = '共享视频播放' } = options
+  const { source = '共享视频播放', force = false } = options
   const video = sharedVideoRef.value
   if (!video) {
     return false
   }
 
-  if (!video.paused && !video.ended) {
+  if (!force && !video.paused && !video.ended) {
     return true
   }
 
@@ -5145,8 +5145,8 @@ function applyVideoSync(sync, forceSeek = false) {
   }
 
   if (sync.playing) {
-    if (video.paused || video.ended) {
-      playSharedVideoSafely({ source: '同步播放' })
+    if (video.paused || video.ended || forceSeek) {
+      playSharedVideoSafely({ source: '同步播放', force: forceSeek })
     }
   } else {
     cancelSharedVideoPlayRequest()
