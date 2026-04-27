@@ -17,3 +17,13 @@ test('实时共享通过 LiveKit session 管理，而不是直接复用 mesh 发
   assert.match(livekitSession, /connectPublisher/)
   assert.match(livekitSession, /connectSubscriber/)
 })
+
+
+test('屏幕/标签页共享会走 LiveKit token 与 livekit 元数据链路', () => {
+  assert.match(roomVue, /async function requestRealtimeShareToken\(\{ canPublish = false, canSubscribe = true \} = \{\}\)/)
+  assert.match(roomVue, /fetch\('\/api\/realtime-share\/token'/)
+  assert.match(roomVue, /async function startScreenShare\(sourceType = 'screen'\)/)
+  assert.match(roomVue, /async function startBrowserTabShare\(\) \{[\s\S]*return startScreenShare\('browser'\)/)
+  assert.match(roomVue, /deliveryMode\s*=\s*'livekit'/)
+  assert.match(roomVue, /deliveryMode,\s*[\s\S]*sourceType,\s*[\s\S]*livekitRoomName:\s*roomId\.value/)
+})

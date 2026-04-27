@@ -597,3 +597,45 @@ test('网页共享移除代理后，/webpage-proxy 路由不再可用', async (t
 
   assert.equal(response.status, 404)
 })
+
+
+test('实时屏幕共享会透传 livekit 元数据给房间成员', async (t) => {
+  const port = await getAvailablePort()
+  const server = await startServer(port)
+  t.after(async () => { await stopServer(server) })
+
+  const baseUrl = `http://127.0.0.1:${port}`
+  const owner = await connect(baseUrl)
+  const admin = await connect(baseUrl)
+  t.after(() => owner.close())
+  t.after(() => admin.close())
+
+  await joinRoom(owner, '900011', '创建者', 'owner-client')
+  const ownerSawAdminJoin = onceWithTimeout(owner, 'participants-changed')
+  const adminSawJoin = onceWithTimeout(admin, 'participants-changed')
+  await joinRoom(admin, '900011', '管理员A', 'admin-client')
+  await ownerSawAdminJoin
+  await adminSawJoin
+
+  const adminSawShareStarted = onceWithTimeout(admin, 'share-started')
+  owner.emit('share-start', {
+    roomId: '900011',
+    media: {
+      id: 'screen-900011',
+      kind: 'screen',
+      fileName: '屏幕共享',
+      fileType: 'screen/stream',
+      fileSize: 0,
+      deliveryMode: 'livekit',
+      sourceType: 'screen',
+      livekitRoomName: '900011',
+      livekitTrackSid: 'TR_SCREEN_1'
+    }
+  })
+
+  const [startedPayload] = await adminSawShareStarted
+  assert.equal(startedPayload.media.deliveryMode, 'livekit')
+  assert.equal(startedPayload.media.sourceType, 'screen')
+  assert.equal(startedPayload.media.livekitRoomName, '900011')
+  assert.equal(startedPayload.media.livekitTrackSid, 'TR_SCREEN_1')
+})
