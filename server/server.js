@@ -1739,6 +1739,28 @@ io.on('connection', (socket) => {
     notifyGameStateUpdated(payload.roomId, room)
   })
 
+  socket.on('game-stage-close', (payload = {}) => {
+    const session = socketSessions.get(socket.id)
+    if (!session?.roomId || session.roomId !== payload.roomId) {
+      return
+    }
+
+    const room = rooms.get(payload.roomId)
+    if (!room || !isAdminSocket(room, socket.id)) {
+      return
+    }
+
+    if (room.gameInvite) {
+      room.gameInvite = null
+      notifyGameInviteUpdated(payload.roomId, null)
+    }
+
+    if (room.gameState) {
+      room.gameState = null
+      notifyGameStateUpdated(payload.roomId, room)
+    }
+  })
+
   socket.on('remote-control-request', (payload = {}) => {
     const session = socketSessions.get(socket.id)
     if (!session?.roomId || session.roomId !== payload.roomId) {

@@ -108,6 +108,9 @@
                         <line x1="3" y1="21" x2="10" y2="14"/>
                       </svg>
                     </button>
+                    <button v-if="canShare" type="button" class="ghost-btn danger close-stage-btn" title="关闭共享" @click.stop="closeGameStage">
+                      关闭共享
+                    </button>
                   </div>
                 </div>
 
@@ -1188,6 +1191,15 @@ const sharedVideoUi = reactive({
 let sharedVideoUiTicker = null
 let sharedVideoPlayRequestId = 0
 let hasShownSharedVideoAutoplayHint = false
+let incomingStreamHealthTicker = null
+const incomingStreamHealth = reactive({
+  mediaId: '',
+  ownerId: '',
+  lastFrameCount: 0,
+  lastCurrentTime: 0,
+  lastProgressAt: 0,
+  lastResyncAt: 0
+})
 
 if (route.query.isCreator === 'true') {
   rememberAdminRoom(roomId.value)
@@ -1201,6 +1213,8 @@ const DATA_CHANNEL_BUFFER_LIMIT = 1024 * 1024
 const VIDEO_PREVIEW_MIN_BYTES = 1024 * 1024
 const VIDEO_PREVIEW_UPDATE_BYTES = 1024 * 1024
 const VIDEO_PREVIEW_UPDATE_INTERVAL = 800
+const STREAM_RESYNC_STALL_MS = 4500
+const STREAM_RESYNC_COOLDOWN_MS = 5000
 const GOMOKU_BOARD_SIZE = 15
 const LANDLORD_REQUIRED_PLAYERS = 3
 const LANDLORD_INVITEE_COUNT = LANDLORD_REQUIRED_PLAYERS - 1
@@ -1239,6 +1253,7 @@ const canStepForwardSharedWebpage = computed(() => canControlSharedWebpage.value
 const canLocalControlSharedVideo = computed(() => Boolean(activeShare.value && activeShare.value.kind === 'video' && isConnected.value))
 const canControlShare = computed(() => isConnected.value && (isShareOwner.value || isRemoteController.value))
 const canManageSharedMedia = computed(() => isConnected.value && (canControlShare.value || isAdmin.value))
+const canCloseGameStage = computed(() => Boolean(canShare.value && (showGameMenu.value || activeGame.value || gameInvite.value)))
 const isValidWebpageUrl = computed(() => {
   const url = webpageUrlInput.value.trim()
   if (!url) return false
@@ -1305,6 +1320,42 @@ const remoteControlHint = computed(() => {
 
   return '只有房主可以发起共享；当前仅支持对正在共享屏幕的成员申请远控。'
 })
+
+function getMeshVideoQualityProfile(peerCount = otherParticipants.value.length) {
+  if (peerCount >= 7) {
+    return {
+      width: 640,
+      height: 360,
+      frameRate: 12,
+      maxBitrate: 500_000
+    }
+  }
+
+  if (peerCount >= 5) {
+    return {
+      width: 960,
+      height: 540,
+      frameRate: 15,
+      maxBitrate: 900_000
+    }
+  }
+
+  if (peerCount >= 3) {
+    return {
+      width: 1280,
+      height: 720,
+      frameRate: 20,
+      maxBitrate: 1_500_000
+    }
+  }
+
+  return {
+    width: 1920,
+    height: 1080,
+    frameRate: 24,
+    maxBitrate: 2_500_000
+  }
+}
 const gomokuInviteTargets = computed(() => participants.value.filter((peer) => peer.id !== selfId.value))
 const landlordInviteTargets = computed(() => participants.value.filter((peer) => peer.id !== selfId.value))
 const gameApps = [
@@ -2173,6 +2224,83 @@ function restartSharedVideoUiTicker() {
   }, 250)
 }
 
+function resetIncomingStreamHealthState() {
+  incomingStreamHealth.mediaId = ''
+  incomingStreamHealth.ownerId = ''
+  incomingStreamHealth.lastFrameCount = 0
+  incomingStreamHealth.lastCurrentTime = 0
+  incomingStreamHealth.lastProgressAt = 0
+  incomingStreamHealth.lastResyncAt = 0
+}
+
+function markIncomingStreamHealthy(video = sharedVideoRef.value) {
+  if (!video) {
+    return
+  }
+
+  const frameCount = Number(video.getVideoPlaybackQuality?.().totalVideoFrames || video.webkitDecodedFrameCount || 0)
+  const currentTime = Number(video.currentTime || 0)
+  incomingStreamHealth.lastFrameCount = frameCount
+  incomingStreamHealth.lastCurrentTime = currentTime
+  incomingStreamHealth.lastProgressAt = Date.now()
+}
+
+function restartIncomingStreamHealthMonitor() {
+  if (incomingStreamHealthTicker) {
+    clearInterval(incomingStreamHealthTicker)
+    incomingStreamHealthTicker = null
+  }
+
+  if (
+    !activeShare.value
+    || !isStreamShare(activeShare.value)
+    || activeShare.value.ownerId === selfId.value
+  ) {
+    resetIncomingStreamHealthState()
+    return
+  }
+
+  incomingStreamHealth.mediaId = activeShare.value.id
+  incomingStreamHealth.ownerId = activeShare.value.ownerId
+  incomingStreamHealth.lastProgressAt = Date.now()
+
+  incomingStreamHealthTicker = window.setInterval(() => {
+    const share = activeShare.value
+    const video = sharedVideoRef.value
+    if (
+      !share
+      || !video
+      || !isStreamShare(share)
+      || share.ownerId === selfId.value
+      || share.id !== incomingStreamHealth.mediaId
+    ) {
+      return
+    }
+
+    const frameCount = Number(video.getVideoPlaybackQuality?.().totalVideoFrames || video.webkitDecodedFrameCount || 0)
+    const currentTime = Number(video.currentTime || 0)
+    const advanced = frameCount > incomingStreamHealth.lastFrameCount || currentTime > incomingStreamHealth.lastCurrentTime + 0.12
+
+    if (advanced) {
+      incomingStreamHealth.lastFrameCount = frameCount
+      incomingStreamHealth.lastCurrentTime = currentTime
+      incomingStreamHealth.lastProgressAt = Date.now()
+      return
+    }
+
+    const now = Date.now()
+    if (
+      now - incomingStreamHealth.lastProgressAt >= STREAM_RESYNC_STALL_MS
+      && now - incomingStreamHealth.lastResyncAt >= STREAM_RESYNC_COOLDOWN_MS
+    ) {
+      incomingStreamHealth.lastResyncAt = now
+      tryBindSharedIncomingStream(share.ownerId)
+      syncSharedVideoElementSource()
+      requestShareSync(activeShare.value.id)
+    }
+  }, 1500)
+}
+
 function getRemotePointerStyle(pointer) {
   return {
     left: `${Math.min(Math.max(pointer.x || 0, 0), 1) * 100}%`,
@@ -2579,6 +2707,77 @@ function getSharedScreenCaptureMeta() {
   }
 }
 
+async function applySenderVideoQualityProfile(sender, profile = getMeshVideoQualityProfile()) {
+  if (!sender?.track || sender.track.kind !== 'video' || typeof sender.getParameters !== 'function' || typeof sender.setParameters !== 'function') {
+    return
+  }
+
+  try {
+    const params = sender.getParameters() || {}
+    const encodings = Array.isArray(params.encodings) && params.encodings.length ? params.encodings : [{}]
+    params.encodings = encodings.map((encoding, index) => {
+      if (index > 0) {
+        return encoding
+      }
+
+      return {
+        ...encoding,
+        maxBitrate: profile.maxBitrate,
+        maxFramerate: profile.frameRate
+      }
+    })
+
+    await sender.setParameters(params)
+  } catch (error) {
+    console.error('应用视频发送质量配置失败:', error)
+  }
+}
+
+async function applyScreenShareTrackConstraints(track, profile = getMeshVideoQualityProfile()) {
+  if (!track?.applyConstraints) {
+    return
+  }
+
+  try {
+    await track.applyConstraints({
+      width: { max: profile.width },
+      height: { max: profile.height },
+      frameRate: { max: profile.frameRate }
+    })
+  } catch (error) {
+    console.error('调整屏幕共享采集质量失败:', error)
+  }
+}
+
+function applyLocalStreamQualityProfile() {
+  const profile = getMeshVideoQualityProfile()
+  Object.values(localTrackSenders).forEach((senders) => {
+    applySenderVideoQualityProfile(senders?.video, profile)
+  })
+}
+
+function applySharedStreamQualityProfile() {
+  const share = activeShare.value
+  if (!share || !isStreamShare(share) || share.ownerId !== selfId.value) {
+    return
+  }
+
+  const profile = getMeshVideoQualityProfile()
+  if (share.kind === 'screen') {
+    const track = sharedOutgoingStream.value?.getVideoTracks?.()[0]
+    applyScreenShareTrackConstraints(track, profile)
+  }
+
+  Object.values(sharedTrackSenders).forEach((senders) => {
+    applySenderVideoQualityProfile(senders?.video, profile)
+  })
+}
+
+function refreshOutgoingMediaQuality() {
+  applyLocalStreamQualityProfile()
+  applySharedStreamQualityProfile()
+}
+
 async function forwardRemoteControlCommandToAgent(command, senderName = '') {
   const capture = getSharedScreenCaptureMeta()
 
@@ -2718,6 +2917,7 @@ function resetSharedVideoTransport() {
   sharedIncomingStream.value = null
   syncSharedVideoUiFromState(null)
   restartSharedVideoUiTicker()
+  restartIncomingStreamHealthMonitor()
 }
 
 function updateActiveShare(patch) {
@@ -2754,6 +2954,7 @@ function updateActiveShare(patch) {
     webpageLoaded.value = false
   }
   restartSharedVideoUiTicker()
+  restartIncomingStreamHealthMonitor()
 }
 
 function updateParticipants(nextParticipants = []) {
@@ -2972,7 +3173,10 @@ function tryBindSharedIncomingStream(peerId) {
     isReceiving: false,
     progress: 100
   })
-  nextTick(syncSharedVideoElementSource)
+  nextTick(() => {
+    syncSharedVideoElementSource()
+    markIncomingStreamHealthy()
+  })
   return true
 }
 
@@ -3148,11 +3352,13 @@ function attachSharedStreamToPeer(peerId, options = {}) {
           console.error('替换共享流轨道失败:', error)
         })
       }
+      applySenderVideoQualityProfile(sender, getMeshVideoQualityProfile())
       return
     }
 
     if (nextTrack) {
       senderCache[kind] = pc.addTrack(nextTrack, stream)
+      applySenderVideoQualityProfile(senderCache[kind], getMeshVideoQualityProfile())
     }
   })
 
@@ -3290,11 +3496,7 @@ async function startScreenShare() {
     }
 
     hasShownRemoteAgentHint = false
-    const agentReady = await checkRemoteControlAgent({ quiet: true })
-    if (!agentReady) {
-      hasShownRemoteAgentHint = true
-      pushSystemMessage('你已开始共享屏幕。若需真实远控，请在本机执行 `npm run remote-agent`。')
-    }
+    remoteControlAgentStatus.value = 'unknown'
 
     updateActiveShare({
       id: shareId,
@@ -3419,7 +3621,7 @@ async function ensureShareDelivery(peerId, force = false) {
   }
 
   if (isStreamShare(share)) {
-    attachSharedStreamToPeer(peerId)
+    attachSharedStreamToPeer(peerId, { forceNegotiation: force })
     outboundDeliveries[deliveryKey(peerId, share.id)] = 'done'
     return
   }
@@ -3836,11 +4038,13 @@ function syncLocalTracksToPeer(peerId) {
           console.error('同步本地轨道失败:', error)
         })
       }
+      applySenderVideoQualityProfile(sender, getMeshVideoQualityProfile())
       return
     }
 
     if (track) {
       senderCache[kind] = pc.addTrack(track, stream)
+      applySenderVideoQualityProfile(senderCache[kind], getMeshVideoQualityProfile())
     }
   })
 }
@@ -4849,6 +5053,21 @@ function closeActiveGame() {
   })
 }
 
+function closeGameStage() {
+  if (!socket.value?.connected || !canCloseGameStage.value) {
+    return
+  }
+
+  if (!activeGame.value && !gameInvite.value) {
+    toggleGameMenu()
+    return
+  }
+
+  socket.value?.emit('game-stage-close', {
+    roomId: roomId.value
+  })
+}
+
 function canManagePeerRemoteControl(peer) {
   return Boolean(
     peer?.id
@@ -5219,6 +5438,7 @@ function applyVideoSync(sync, forceSeek = false) {
 
 
 function handleSharedVideoLoaded() {
+  markIncomingStreamHealthy()
   if (sharedVideoRef.value && !shouldUseSyncedVideoUi()) {
     sharedVideoUi.duration = getResolvedSharedVideoDuration(activeShare.value?.sync)
     sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
@@ -5231,6 +5451,7 @@ function handleSharedVideoLoaded() {
 }
 
 function handleSharedVideoCanPlay() {
+  markIncomingStreamHealthy()
   if (sharedVideoRef.value && !shouldUseSyncedVideoUi()) {
     sharedVideoUi.duration = getResolvedSharedVideoDuration(activeShare.value?.sync)
     sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
@@ -5243,6 +5464,7 @@ function handleSharedVideoCanPlay() {
 }
 
 function handleSharedVideoPlaying() {
+  markIncomingStreamHealthy()
   if (
     activeShare.value?.kind === 'video'
     && activeShare.value.ownerId === selfId.value
@@ -5291,6 +5513,10 @@ function handleSharedVideoSeek() {
 }
 
 function handleSharedVideoTimeUpdate() {
+  if (isStreamShare(activeShare.value) && activeShare.value?.ownerId !== selfId.value) {
+    markIncomingStreamHealthy()
+  }
+
   if (sharedVideoRef.value && !shouldUseSyncedVideoUi()) {
     sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
     sharedVideoUi.duration = Number(sharedVideoRef.value.duration || activeShare.value?.sync?.duration || 0)
@@ -5555,11 +5781,26 @@ watch(
       tryBindSharedIncomingStream(activeShare.value.ownerId)
     }
     syncSharedVideoElementSource()
+    restartIncomingStreamHealthMonitor()
     if (activeShare.value?.kind !== 'video') {
       syncSharedVideoUiFromState(null)
     }
   },
   { deep: true }
+)
+
+watch(
+  () => [
+    otherParticipants.value.length,
+    activeShare.value?.id,
+    activeShare.value?.kind,
+    activeShare.value?.deliveryMode,
+    sharedOutgoingStream.value?.id,
+    localMediaStream.value?.id
+  ],
+  () => {
+    refreshOutgoingMediaQuality()
+  }
 )
 
 onMounted(() => {
@@ -5570,6 +5811,10 @@ onUnmounted(() => {
   if (sharedVideoUiTicker) {
     clearInterval(sharedVideoUiTicker)
     sharedVideoUiTicker = null
+  }
+  if (incomingStreamHealthTicker) {
+    clearInterval(incomingStreamHealthTicker)
+    incomingStreamHealthTicker = null
   }
   cleanupSession()
 })
