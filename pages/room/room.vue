@@ -1925,6 +1925,10 @@ function shouldCreateInitialDataChannel(peerId) {
   return Boolean(selfId.value) && selfId.value < peerId
 }
 
+function isPolitePeer(peerId) {
+  return Boolean(selfId.value) && selfId.value > peerId
+}
+
 function isStreamShare(share = activeShare.value) {
   return Boolean(share && share.deliveryMode === 'stream' && ['video', 'screen'].includes(share.kind))
 }
@@ -4208,13 +4212,16 @@ async function handleSignal(payload) {
 
   try {
     if (payload.description) {
-      const readyForOffer = !makingOffer[senderId]
-        && (pc.signalingState === 'stable' || isSettingRemoteAnswerPending[senderId])
-      const offerCollision = payload.description.type === 'offer' && !readyForOffer
+      const offerCollision = payload.description.type === 'offer'
+        && (makingOffer[senderId] || pc.signalingState !== 'stable')
 
-      ignoreOffer[senderId] = shouldCreateInitialDataChannel(senderId) && offerCollision
+      ignoreOffer[senderId] = !isPolitePeer(senderId) && offerCollision
       if (ignoreOffer[senderId]) {
         return
+      }
+
+      if (offerCollision && isPolitePeer(senderId)) {
+        await pc.setLocalDescription({ type: 'rollback' })
       }
 
       isSettingRemoteAnswerPending[senderId] = payload.description.type === 'answer'
@@ -4971,6 +4978,11 @@ function handleFileChange(event) {
 
   if (!file.size) {
     alert('文件为空，无法共享')
+    return
+  }
+
+  if (kind === 'video' && supportsStreamVideoShare()) {
+    startRealtimeVideoShare(file)
     return
   }
 
