@@ -15,7 +15,8 @@
     "install-all": "./install.sh",
     "test": "node --test tests/**/*.test.mjs",
     "stop-all": "./stop.sh",
-    "uninstall-all": "./uninstall.sh"
+    "uninstall-all": "./uninstall.sh",
+    "start-dev": "./start_dev.sh"
   },
   "dependencies": {
     "express": "^5.2.1",

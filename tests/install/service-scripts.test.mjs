@@ -4,6 +4,8 @@ import fs from 'node:fs'
 
 const pkg = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))
 const startScript = fs.readFileSync(new URL('../../start.sh', import.meta.url), 'utf8')
+const startDevScriptPath = new URL('../../start_dev.sh', import.meta.url)
+const startDevScript = fs.existsSync(startDevScriptPath) ? fs.readFileSync(startDevScriptPath, 'utf8') : ''
 const stopScriptPath = new URL('../../stop.sh', import.meta.url)
 const stopScript = fs.existsSync(stopScriptPath) ? fs.readFileSync(stopScriptPath, 'utf8') : ''
 const uninstallScriptPath = new URL('../../uninstall.sh', import.meta.url)
@@ -14,6 +16,15 @@ test('package.json 暴露 start.sh / stop.sh / uninstall.sh 服务脚本', () =>
   assert.equal(pkg.scripts?.['start-all'], './start.sh')
   assert.equal(pkg.scripts?.['stop-all'], './stop.sh')
   assert.equal(pkg.scripts?.['uninstall-all'], './uninstall.sh')
+})
+
+test('start_dev.sh 在当前终端同时启动前端和后端开发服务', () => {
+  assert.equal(pkg.scripts?.['start-dev'], './start_dev.sh')
+  assert.match(startDevScript, /npm run server/)
+  assert.match(startDevScript, /npm run dev/)
+  assert.match(startDevScript, /trap cleanup EXIT INT TERM/)
+  assert.match(startDevScript, /backend_pid=\$!|backend_pid="\$!"/)
+  assert.match(startDevScript, /kill "\$backend_pid"|kill \$backend_pid/)
 })
 
 test('start.sh 通过 PID 文件启动生产服务且不操作 Nginx 全局服务', () => {
