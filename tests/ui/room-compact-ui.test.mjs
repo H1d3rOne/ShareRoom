@@ -275,7 +275,7 @@ test('数据通道异常关闭后会补发共享同步，并忽略预期的 Clos
   assert.match(roomVue, /function isExpectedDataChannelAbortError\(error, channel\) \{[\s\S]*User-Initiated Abort[\s\S]*Close called/)
   assert.match(roomVue, /channel\.onopen = \(\) => \{[\s\S]*else if \(activeShare\.value\?\.ownerId === peerId && \(!activeShare\.value\.url \|\| hasIncompleteIncomingTransfer\(peerId, activeShare\.value\.id\)\)\) \{[\s\S]*requestShareSync\(activeShare\.value\.id\)/)
   assert.match(roomVue, /channel\.onclose = \(\) => \{[\s\S]*const expectedClose = Boolean\(channel\.__expectedClose\)[\s\S]*if \(!expectedClose && activeShare\.value\?\.ownerId === peerId && hasIncompleteIncomingTransfer\(peerId, activeShare\.value\.id\)\) \{[\s\S]*requestShareSync\(activeShare\.value\.id\)/)
-  assert.match(roomVue, /if \(!expectedClose && !dataChannels\[peerId\] && shouldCreateInitialDataChannel\(peerId\) && hasParticipant\(peerId\) && pc && pc\.signalingState !== 'closed' && pc\.connectionState !== 'closed'\) \{[\s\S]*ensureDataChannel\(peerId, pc\)/)
+  assert.match(roomVue, /if \(!expectedClose && !dataChannels\[peerId\] && shouldCreateInitialDataChannel\(peerId\) && hasParticipant\(peerId\) && pc && pc\.signalingState !== 'closed' && pc\.connectionState !== 'closed'\) \{[\s\S]*ensureDataChannel\(peerId, pc\)[\s\S]*queueSharedNegotiation\(peerId\)/)
   assert.match(roomVue, /channel\.onerror = \(error\) => \{[\s\S]*if \(isExpectedDataChannelAbortError\(error, channel\)\) \{[\s\S]*return[\s\S]*\}[\s\S]*console\.error\('数据通道错误:', error\)/)
   assert.match(roomVue, /channel\.__expectedClose = true[\s\S]*channel\.close\(\)/)
 })
@@ -288,4 +288,12 @@ test('多人房间会自动降低 WebRTC 视频负载，并在共享流卡住时
   assert.match(roomVue, /watch\(\s*\(\) => \[\s*otherParticipants\.value\.length,\s*activeShare\.value\?\.id,\s*activeShare\.value\?\.kind,\s*activeShare\.value\?\.deliveryMode,\s*sharedOutgoingStream\.value\?\.id,\s*localMediaStream\.value\?\.id\s*\][\s\S]*refreshOutgoingMediaQuality\(\)/)
   assert.match(roomVue, /function restartIncomingStreamHealthMonitor\(\) \{[\s\S]*requestShareSync\(activeShare\.value\.id\)/)
   assert.match(roomVue, /if \(isStreamShare\(share\)\) \{[\s\S]*attachSharedStreamToPeer\(peerId, \{ forceNegotiation: force \}\)/)
+})
+
+test('共享流重绑会清理失活旧流并优先选择 live stream，连接异常时触发轻量恢复', () => {
+  assert.match(roomVue, /function isLiveStreamCandidate\(stream\) \{[\s\S]*track\.readyState === 'live'/)
+  assert.match(roomVue, /function prunePeerStreams\(peerId\) \{[\s\S]*peerStreamCatalog\[peerId\][\s\S]*track\.readyState === 'live'/)
+  assert.match(roomVue, /function pickPrimaryPeerStream\(peerId\) \{[\s\S]*prunePeerStreams\(peerId\)[\s\S]*streams\.find\(\(stream\) => isLiveStreamCandidate\(stream\)\)/)
+  assert.match(roomVue, /function tryBindSharedIncomingStream\(peerId\) \{[\s\S]*const streams = prunePeerStreams\(peerId\)[\s\S]*stream !== remoteStreams\[peerId\] && isLiveStreamCandidate\(stream\)[\s\S]*streams\.find\(\(stream\) => isLiveStreamCandidate\(stream\)\)/)
+  assert.match(roomVue, /pc\.onconnectionstatechange = \(\) => \{[\s\S]*pc\.connectionState === 'connected'[\s\S]*ensureShareDelivery\(peerId\)[\s\S]*pc\.connectionState === 'disconnected' \|\| pc\.connectionState === 'failed'[\s\S]*prunePeerStreams\(peerId\)[\s\S]*tryBindSharedIncomingStream\(peerId\)[\s\S]*requestShareSync\(activeShare\.value\.id\)/)
 })

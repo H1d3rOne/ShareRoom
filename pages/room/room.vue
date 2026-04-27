@@ -3099,6 +3099,10 @@ function hasLiveVideoTrack(stream) {
   return Boolean(stream?.getVideoTracks().some((track) => track.readyState === 'live'))
 }
 
+function isLiveStreamCandidate(stream) {
+  return Boolean(stream?.getTracks?.().some((track) => track.readyState === 'live'))
+}
+
 function rememberPeerStream(peerId, stream) {
   if (!stream?.id) {
     return
@@ -3113,8 +3117,28 @@ function getPeerStreams(peerId) {
   return Object.values(peerStreamCatalog[peerId] || {})
 }
 
+function prunePeerStreams(peerId) {
+  const catalog = peerStreamCatalog[peerId]
+  if (!catalog) {
+    return []
+  }
+
+  Object.entries(catalog).forEach(([streamId, stream]) => {
+    if (!isLiveStreamCandidate(stream)) {
+      delete catalog[streamId]
+    }
+  })
+
+  const streams = Object.values(catalog)
+  if (!streams.length) {
+    delete peerStreamCatalog[peerId]
+  }
+
+  return streams
+}
+
 function pickPrimaryPeerStream(peerId) {
-  const streams = getPeerStreams(peerId)
+  const streams = prunePeerStreams(peerId)
   if (!streams.length) {
     return null
   }
@@ -3124,10 +3148,12 @@ function pickPrimaryPeerStream(peerId) {
     && activeShare.value.ownerId === peerId
     && isStreamShare(activeShare.value)
   ) {
-    return streams.find((stream) => stream.id !== activeShare.value.streamId) || null
+    return streams.find((stream) => stream.id !== activeShare.value.streamId && isLiveStreamCandidate(stream))
+      || streams.find((stream) => isLiveStreamCandidate(stream))
+      || null
   }
 
-  return streams[0]
+  return streams.find((stream) => isLiveStreamCandidate(stream)) || streams[0]
 }
 
 function tryBindSharedIncomingStream(peerId) {
@@ -3141,7 +3167,7 @@ function tryBindSharedIncomingStream(peerId) {
     return false
   }
 
-  const streams = getPeerStreams(peerId)
+  const streams = prunePeerStreams(peerId)
   if (!streams.length) {
     return false
   }
@@ -3153,11 +3179,11 @@ function tryBindSharedIncomingStream(peerId) {
   }
 
   if (!candidate) {
-    candidate = streams.find((stream) => stream !== remoteStreams[peerId] && stream.getVideoTracks().length > 0) || null
+    candidate = streams.find((stream) => stream !== remoteStreams[peerId] && isLiveStreamCandidate(stream)) || null
   }
 
   if (!candidate) {
-    candidate = streams.find((stream) => stream.getVideoTracks().length > 0) || null
+    candidate = streams.find((stream) => isLiveStreamCandidate(stream)) || null
   }
 
   if (!candidate) {
@@ -3991,6 +4017,7 @@ function registerDataChannel(peerId, channel) {
     const pc = peerConnections[peerId]
     if (!expectedClose && !dataChannels[peerId] && shouldCreateInitialDataChannel(peerId) && hasParticipant(peerId) && pc && pc.signalingState !== 'closed' && pc.connectionState !== 'closed') {
       ensureDataChannel(peerId, pc)
+      queueSharedNegotiation(peerId)
     }
   }
 
@@ -4147,6 +4174,16 @@ function ensurePeerConnection(peerId, options = {}) {
   pc.onconnectionstatechange = () => {
     if (pc.connectionState === 'connected' && activeShare.value?.ownerId === selfId.value) {
       ensureShareDelivery(peerId)
+      return
+    }
+
+    if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+      prunePeerStreams(peerId)
+
+      if (activeShare.value?.ownerId === peerId && isStreamShare(activeShare.value)) {
+        tryBindSharedIncomingStream(peerId)
+        requestShareSync(activeShare.value.id)
+      }
     }
   }
 
