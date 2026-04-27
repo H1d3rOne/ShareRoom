@@ -1172,6 +1172,8 @@ const sharedVideoUi = reactive({
   muted: true
 })
 let sharedVideoUiTicker = null
+let sharedVideoPlayRequestId = 0
+let hasShownSharedVideoAutoplayHint = false
 
 if (route.query.isCreator === 'true') {
   rememberAdminRoom(roomId.value)
@@ -1980,6 +1982,67 @@ function shouldSuppressShareEvents() {
   return Date.now() < suppressShareEventsUntil.value
 }
 
+function cancelSharedVideoPlayRequest() {
+  sharedVideoPlayRequestId += 1
+}
+
+function handleSharedVideoPlayError(error, options = {}) {
+  const { source = '共享视频播放', silentAbort = true } = options
+
+  if (error?.name === 'AbortError') {
+    if (!silentAbort) {
+      console.warn(`${source}已被新的播放状态打断`)
+    }
+    return false
+  }
+
+  if (error?.name === 'NotAllowedError') {
+    if (!hasShownSharedVideoAutoplayHint) {
+      pushSystemMessage('浏览器阻止了自动播放，已自动静音重试；如仍未播放，请点击播放按钮继续')
+      hasShownSharedVideoAutoplayHint = true
+    }
+    return false
+  }
+
+  console.error(`${source}失败:`, error)
+  return false
+}
+
+async function playSharedVideoSafely(options = {}) {
+  const { source = '共享视频播放' } = options
+  const video = sharedVideoRef.value
+  if (!video) {
+    return false
+  }
+
+  if (!video.paused && !video.ended) {
+    return true
+  }
+
+  const requestId = ++sharedVideoPlayRequestId
+
+  try {
+    await video.play()
+    return true
+  } catch (error) {
+    if (requestId !== sharedVideoPlayRequestId && error?.name === 'AbortError') {
+      return false
+    }
+
+    if (error?.name === 'NotAllowedError' && !video.muted) {
+      video.muted = true
+      sharedVideoMuted.value = true
+      sharedVideoUi.muted = true
+      sharedVideoHasLocalMuteOverride.value = true
+      return video.play()
+        .then(() => true)
+        .catch((retryError) => handleSharedVideoPlayError(retryError, { source, silentAbort: true }))
+    }
+
+    return handleSharedVideoPlayError(error, { source, silentAbort: true })
+  }
+}
+
 function isPeerConnected(peerId) {
   if (peerId === selfId.value) {
     return true
@@ -2686,6 +2749,8 @@ function clearIncomingTransfers(keepMediaId = null) {
 }
 
 function clearActiveShare() {
+  cancelSharedVideoPlayRequest()
+  hasShownSharedVideoAutoplayHint = false
   resetSharedVideoTransport()
   clearRemoteCommandOverlay()
 
@@ -3527,9 +3592,7 @@ async function updateIncomingVideoPreview(peerId, mediaId, force = false) {
   }
 
   if (previousState.shouldResume) {
-    video.play().catch((error) => {
-      console.error('预缓存播放失败:', error)
-    })
+    playSharedVideoSafely({ source: '预缓存播放' })
   }
 }
 
@@ -5067,6 +5130,7 @@ function applyVideoSync(sync, forceSeek = false) {
   suppressShareEvents(sync.playing ? 1200 : 700)
 
   if (!canGlobalControlShare.value && sharedVideoLocalPaused.value) {
+    cancelSharedVideoPlayRequest()
     video.pause()
     restartSharedVideoUiTicker()
     return
@@ -5081,10 +5145,11 @@ function applyVideoSync(sync, forceSeek = false) {
   }
 
   if (sync.playing) {
-    video.play().catch((error) => {
-      console.error('同步播放失败:', error)
-    })
+    if (video.paused || video.ended) {
+      playSharedVideoSafely({ source: '同步播放' })
+    }
   } else {
+    cancelSharedVideoPlayRequest()
     video.pause()
   }
 
@@ -5204,10 +5269,9 @@ function toggleSharedVideoPlayback() {
       sharedVideoUi.playing = nextPlaying
       suppressShareEvents(500)
       if (nextPlaying) {
-        sharedVideoRef.value.play().catch((error) => {
-          console.error('实时流本地播放失败:', error)
-        })
+        playSharedVideoSafely({ source: '实时流本地播放' })
       } else {
+        cancelSharedVideoPlayRequest()
         sharedVideoRef.value.pause()
       }
       emitShareControl(nextPlaying ? 'play' : 'pause', {
@@ -5221,9 +5285,7 @@ function toggleSharedVideoPlayback() {
     if (sharedVideoRef.value.paused) {
       suppressShareEvents(500)
       sharedVideoUi.playing = true
-      sharedVideoRef.value.play().catch((error) => {
-        console.error('视频播放失败:', error)
-      })
+      playSharedVideoSafely({ source: '视频播放' })
       emitShareControl('play', {
         playing: true,
         currentTime: sharedVideoRef.value.currentTime || 0,
@@ -5235,6 +5297,7 @@ function toggleSharedVideoPlayback() {
 
     suppressShareEvents(500)
     sharedVideoUi.playing = false
+    cancelSharedVideoPlayRequest()
     sharedVideoRef.value.pause()
     emitShareControl('pause', {
       playing: false,
@@ -5256,14 +5319,13 @@ function toggleSharedVideoPlayback() {
       console.error('恢复本地视频进度失败:', error)
     }
 
-    sharedVideoRef.value.play().catch((error) => {
-      console.error('本地恢复视频播放失败:', error)
-    })
+    playSharedVideoSafely({ source: '本地恢复视频播放' })
     return
   }
 
   sharedVideoLocalPaused.value = true
   sharedVideoUi.playing = false
+  cancelSharedVideoPlayRequest()
   sharedVideoRef.value.pause()
 }
 
