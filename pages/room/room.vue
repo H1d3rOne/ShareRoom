@@ -647,104 +647,106 @@
           </template>
 
           <template v-else-if="activeShare">
-            <img
-              v-if="activeShare.kind === 'image' && activeShare.url"
-              :src="activeShare.url"
-              class="shared-image"
-              :class="{ zoomed: activeShare.zoomed, readonly: !canControlShare }"
-              @click="toggleSharedImageZoom"
-            />
+            <div class="share-content-frame">
+              <img
+                v-if="activeShare.kind === 'image' && activeShare.url"
+                :src="activeShare.url"
+                class="shared-image"
+                :class="{ zoomed: activeShare.zoomed, readonly: !canControlShare }"
+                @click="toggleSharedImageZoom"
+              />
 
-            <video
-              v-else-if="isVideoLikeShare(activeShare)"
-              ref="sharedVideoRef"
-              class="shared-video"
-              :src="getSharedVideoSource(activeShare)"
-              autoplay
-              :muted="shouldMuteSharedVideo(activeShare)"
-              playsinline
-              preload="auto"
-              @loadedmetadata="handleSharedVideoLoaded"
-              @canplay="handleSharedVideoCanPlay"
-              @playing="handleSharedVideoPlaying"
-              @play="handleSharedVideoPlay"
-              @pause="handleSharedVideoPause"
-              @seeked="handleSharedVideoSeek"
-              @timeupdate="handleSharedVideoTimeUpdate"
-            ></video>
+              <video
+                v-else-if="isVideoLikeShare(activeShare)"
+                ref="sharedVideoRef"
+                class="shared-video"
+                :src="getSharedVideoSource(activeShare)"
+                autoplay
+                :muted="shouldMuteSharedVideo(activeShare)"
+                playsinline
+                preload="auto"
+                @loadedmetadata="handleSharedVideoLoaded"
+                @canplay="handleSharedVideoCanPlay"
+                @playing="handleSharedVideoPlaying"
+                @play="handleSharedVideoPlay"
+                @pause="handleSharedVideoPause"
+                @seeked="handleSharedVideoSeek"
+                @timeupdate="handleSharedVideoTimeUpdate"
+              ></video>
 
-            <div v-else-if="activeShare.kind === 'webpage'" ref="webpageShareContainerRef" class="webpage-share-container">
-              <div class="webpage-toolbar">
-                <button
-                  type="button"
-                  class="webpage-nav-btn"
-                  :disabled="!canStepBackwardSharedWebpage"
-                  title="后退"
-                  @click.stop="goBackSharedWebpage"
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="m15 18-6-6 6-6" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  class="webpage-nav-btn"
-                  :disabled="!canStepForwardSharedWebpage"
-                  title="前进"
-                  @click.stop="goForwardSharedWebpage"
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="m9 6 6 6-6 6" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  class="webpage-nav-btn refresh"
-                  :disabled="!canRefreshSharedWebpage"
-                  title="刷新"
-                  @click.stop="refreshSharedWebpage"
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M20 11a8 8 0 1 0 2 5.3" />
-                    <path d="M20 4v7h-7" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  class="webpage-nav-btn fullscreen"
-                  title="全屏"
-                  @click.stop="toggleSharedWebpageFullscreen"
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <polyline points="15 3 21 3 21 9"/>
-                    <polyline points="9 21 3 21 3 15"/>
-                    <line x1="21" y1="3" x2="14" y2="10"/>
-                    <line x1="3" y1="21" x2="10" y2="14"/>
-                  </svg>
-                </button>
+              <div v-else-if="activeShare.kind === 'webpage'" ref="webpageShareContainerRef" class="webpage-share-container">
+                <div class="webpage-toolbar">
+                  <button
+                    type="button"
+                    class="webpage-nav-btn"
+                    :disabled="!canStepBackwardSharedWebpage"
+                    title="后退"
+                    @click.stop="goBackSharedWebpage"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m15 18-6-6 6-6" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="webpage-nav-btn"
+                    :disabled="!canStepForwardSharedWebpage"
+                    title="前进"
+                    @click.stop="goForwardSharedWebpage"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m9 6 6 6-6 6" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="webpage-nav-btn refresh"
+                    :disabled="!canRefreshSharedWebpage"
+                    title="刷新"
+                    @click.stop="refreshSharedWebpage"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M20 11a8 8 0 1 0 2 5.3" />
+                      <path d="M20 4v7h-7" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="webpage-nav-btn fullscreen"
+                    title="全屏"
+                    @click.stop="toggleSharedWebpageFullscreen"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <polyline points="15 3 21 3 21 9"/>
+                      <polyline points="9 21 3 21 3 15"/>
+                      <line x1="21" y1="3" x2="14" y2="10"/>
+                      <line x1="3" y1="21" x2="10" y2="14"/>
+                    </svg>
+                  </button>
+                </div>
+                <div v-if="!webpageLoaded" class="webpage-loading">
+                  <div class="loader"></div>
+                  <p>正在加载网页...</p>
+                </div>
+                <iframe
+                  v-for="(entry, index) in getWebpageHistoryEntries(activeShare)"
+                  :key="getWebpageIframeKey(activeShare, entry, index)"
+                  :src="entry.url"
+                  class="webpage-iframe"
+                  :class="[index === getActiveWebpageHistoryIndex(activeShare) ? 'active' : 'inactive', { hidden: index === getActiveWebpageHistoryIndex(activeShare) && !webpageLoaded }]"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-downloads"
+                  frameborder="0"
+                  allowfullscreen
+                  referrerpolicy="no-referrer"
+                  @load="handleWebpageLoad(entry, index)"
+                  @error="handleWebpageError(entry, index)"
+                ></iframe>
               </div>
-              <div v-if="!webpageLoaded" class="webpage-loading">
+
+              <div v-else class="share-loading">
                 <div class="loader"></div>
-                <p>正在加载网页...</p>
+                <p>正在接收共享文件…</p>
               </div>
-              <iframe
-                v-for="(entry, index) in getWebpageHistoryEntries(activeShare)"
-                :key="getWebpageIframeKey(activeShare, entry, index)"
-                :src="entry.url"
-                class="webpage-iframe"
-                :class="[index === getActiveWebpageHistoryIndex(activeShare) ? 'active' : 'inactive', { hidden: index === getActiveWebpageHistoryIndex(activeShare) && !webpageLoaded }]"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-downloads"
-                frameborder="0"
-                allowfullscreen
-                referrerpolicy="no-referrer"
-                @load="handleWebpageLoad(entry, index)"
-                @error="handleWebpageError(entry, index)"
-              ></iframe>
-            </div>
-
-            <div v-else class="share-loading">
-              <div class="loader"></div>
-              <p>正在接收共享文件…</p>
             </div>
 
             <div class="share-badge" :title="getShareBadgeTitle(activeShare)">{{ getShareBadgeDisplayTitle(activeShare) }}</div>
@@ -6365,10 +6367,26 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
+.share-content-frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+}
+
 .shared-image,
 .shared-video {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
   width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
   object-fit: contain;
 }
 
