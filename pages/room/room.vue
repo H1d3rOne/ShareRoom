@@ -1768,7 +1768,7 @@ const shareStatusText = computed(() => {
     return ''
   }
 
-  if (isVideoLikeShare(share) && share.deliveryMode === 'stream' && share.ownerId !== selfId.value && !sharedIncomingStream.value) {
+  if (isVideoLikeShare(share) && isStreamShare(share) && share.ownerId !== selfId.value && !sharedIncomingStream.value) {
     return `正在接入实时${share.kind === 'screen' ? '屏幕流' : '视频流'}`
   }
 
@@ -1790,7 +1790,7 @@ const shareStatusText = computed(() => {
   }
 
   if (share.kind === 'video' && share.sync) {
-    return share.deliveryMode === 'stream'
+    return isStreamShare(share)
       ? (share.sync.playing ? '正在实时同步播放' : '实时流已暂停')
       : (share.sync.playing ? '正在同步播放' : '当前为暂停状态')
   }
@@ -1952,7 +1952,7 @@ function isPolitePeer(peerId) {
 }
 
 function isStreamShare(share = activeShare.value) {
-  return Boolean(share && share.deliveryMode === 'stream' && ['video', 'screen'].includes(share.kind))
+  return Boolean(share && ['stream', 'livekit'].includes(share.deliveryMode) && ['video', 'screen'].includes(share.kind))
 }
 
 function isVideoLikeShare(share = activeShare.value) {
@@ -1974,7 +1974,7 @@ function getSharedVideoSource(share = activeShare.value) {
   if (!share || share.kind !== 'video') {
     return undefined
   }
-  if (share.deliveryMode === 'stream' && share.ownerId !== selfId.value) {
+  if (['stream', 'livekit'].includes(share.deliveryMode) && share.ownerId !== selfId.value) {
     return undefined
   }
   return share.url || undefined
@@ -6049,10 +6049,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-body {
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-}
-
 .container {
   position: relative;
   min-height: 100vh;
@@ -7997,7 +7993,7 @@ body {
 }
 
 .game-panel.in-match .gomoku-board {
-  width: min(100%, 560px, calc(100svh - 250px));
+  width: min(100%, 560px, calc(100vh - 250px));
   padding: 20px;
   border-radius: 28px;
 }
@@ -9071,13 +9067,13 @@ body {
   }
 
   .shared-stage {
-    height: clamp(240px, 60svw, 360px);
+    height: clamp(240px, 60vw, 360px);
     min-height: 240px;
     border-radius: 22px;
   }
 
   .shared-stage.game-mode {
-    height: clamp(420px, 72svh, 620px);
+    height: clamp(420px, 72vh, 620px);
   }
 
   .share-toolbar,
@@ -9226,7 +9222,7 @@ body {
   }
 
   .shared-stage {
-    height: clamp(220px, 66svw, 300px);
+    height: clamp(220px, 66vw, 300px);
     min-height: 220px;
     border-radius: 18px;
   }
