@@ -796,7 +796,7 @@
                 <div v-if="activeShare.kind === 'video'" class="video-control-panel">
                   <button
                     class="control-pill playback-btn"
-                    :disabled="!canLocalControlSharedVideo"
+                    :disabled="!canLocalControlSharedVideo || (!canGlobalControlShare && !sharedVideoLocalPaused && !sharedVideoUi.playing)"
                     @click="toggleSharedVideoPlayback"
                     :title="sharedVideoUi.playing ? '暂停' : '播放'"
                   >
@@ -2894,16 +2894,24 @@ async function playIncomingSharedStream(video, stream, source) {
   video.playsInline = true
   sharedVideoPlayFailed.value = false
 
-  // 先静音确保自动播放不被浏览器阻止
-  video.muted = true
-  sharedVideoMuted.value = true
-  sharedVideoUi.muted = true
+  // 先静音确保自动播放不被浏览器阻止（仅首次，之后保留用户设置）
+  const wasUserUnmuted = !sharedVideoMuted.value && video.srcObject
+  if (!wasUserUnmuted) {
+    video.muted = true
+    sharedVideoMuted.value = true
+    sharedVideoUi.muted = true
+  }
 
   if (video.srcObject !== stream) {
     video.srcObject = stream || null
   }
 
   if (!stream) {
+    return
+  }
+
+  if (!canGlobalControlShare.value && sharedVideoLocalPaused.value) {
+    video.pause()
     return
   }
 
@@ -3578,11 +3586,18 @@ async function connectIncomingLivekitShare(media) {
           return
         }
         sharedVideoPlayFailed.value = false
+        const wasUserUnmuted = !sharedVideoMuted.value
         track.attach(video).then(() => {
-          video.muted = true
           video.playsInline = true
-          sharedVideoMuted.value = true
-          sharedVideoUi.muted = true
+          if (!wasUserUnmuted) {
+            video.muted = true
+            sharedVideoMuted.value = true
+            sharedVideoUi.muted = true
+          }
+          if (!canGlobalControlShare.value && sharedVideoLocalPaused.value) {
+            video.pause()
+            return
+          }
           syncSharedVideoElementSource()
         }).catch((error) => {
           console.error('livekit track attach failed:', error)
@@ -5843,6 +5858,10 @@ function toggleSharedVideoPlayback() {
   }
 
   if (sharedVideoRef.value.paused) {
+    // 全局暂停时非管理员不能本地恢复播放
+    if (activeShare.value?.sync && !activeShare.value.sync.playing) {
+      return
+    }
     sharedVideoLocalPaused.value = false
     const syncedTime = getVideoSyncTime(activeShare.value.sync)
     try {
