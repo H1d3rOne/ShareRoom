@@ -1259,7 +1259,16 @@ const isRemoteController = computed(() => participants.value.find((peer) => peer
 const isRemoteControlTarget = computed(() => remoteControlTargetId.value === selfId.value)
 const hasLocalVideo = computed(() => hasLiveVideoTrack(localMediaStream.value))
 const participantsWithVideo = computed(() => {
-  return otherParticipants.value.filter((peer) => hasLiveVideoTrack(remoteStreams[peer.id]))
+  return otherParticipants.value.filter((peer) => {
+    const stream = remoteStreams[peer.id]
+    if (!stream || !hasLiveVideoTrack(stream)) return false
+    // 排除共享流：如果该 peer 是共享者且该流就是共享流，则不在宫格显示
+    if (isStreamShare(activeShare.value) && activeShare.value.ownerId === peer.id) {
+      const sharedStreamId = sharedIncomingStream.value?.id || activeShare.value.streamId
+      if (sharedStreamId && stream.id === sharedStreamId) return false
+    }
+    return true
+  })
 })
 const hasVisibleVideoTiles = computed(() => hasLocalVideo.value || participantsWithVideo.value.length > 0)
 const isSharingScreen = computed(() => activeShare.value?.kind === 'screen')
