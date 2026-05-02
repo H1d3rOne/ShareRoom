@@ -1157,7 +1157,6 @@ const webpageLoaded = ref(false)
 const webpageIframeLoadState = reactive({})
 const sharedVideoMuted = ref(true)
 const sharedVideoPlayFailed = ref(false)
-const sharedVideoHasLocalMuteOverride = ref(false)
 const sharedVideoLocalPaused = ref(false)
 const lastVideoHeartbeatAt = ref(0)
 const lastRemotePointerSentAt = ref(0)
@@ -2041,21 +2040,9 @@ function shouldMuteSharedVideo(share = activeShare.value) {
 
 function toggleSharedVideoMute() {
   sharedVideoMuted.value = !sharedVideoMuted.value
-  if (!canGlobalControlShare.value) {
-    sharedVideoHasLocalMuteOverride.value = true
-  }
   sharedVideoUi.muted = sharedVideoMuted.value
   if (sharedVideoRef.value) {
     sharedVideoRef.value.muted = sharedVideoMuted.value
-  }
-
-  if (canGlobalControlShare.value && activeShare.value?.kind === 'video') {
-    emitShareControl('mute', {
-      muted: sharedVideoMuted.value,
-      playing: sharedVideoUi.playing,
-      currentTime: sharedVideoUi.currentTime,
-      duration: sharedVideoUi.duration
-    })
   }
 }
 
@@ -2231,7 +2218,6 @@ function syncSharedVideoUiFromState(sync = activeShare.value?.sync) {
     sharedVideoUi.playing = false
     sharedVideoUi.muted = true
     sharedVideoMuted.value = true
-    sharedVideoHasLocalMuteOverride.value = false
     return
   }
 
@@ -2245,14 +2231,7 @@ function syncSharedVideoUiFromState(sync = activeShare.value?.sync) {
   sharedVideoUi.playing = !canGlobalControlShare.value && sharedVideoLocalPaused.value
     ? false
     : Boolean(sync.playing)
-  const syncedMuted = Boolean(sync.muted ?? true)
-  if (canGlobalControlShare.value || !sharedVideoHasLocalMuteOverride.value) {
-    sharedVideoMuted.value = syncedMuted
-  }
-  if (canGlobalControlShare.value && !syncedMuted) {
-    sharedVideoHasLocalMuteOverride.value = false
-  }
-  sharedVideoUi.muted = canGlobalControlShare.value ? syncedMuted : sharedVideoMuted.value
+  sharedVideoUi.muted = sharedVideoMuted.value
   if (sharedVideoRef.value) {
     sharedVideoRef.value.muted = sharedVideoMuted.value
   }
@@ -2930,14 +2909,6 @@ async function playIncomingSharedStream(video, stream, source) {
 
   const played = await playSharedVideoSafely({ source, force: true })
   sharedVideoPlayFailed.value = !played
-
-  // 播放成功后，根据同步状态恢复声音
-  if (played && activeShare.value?.sync) {
-    const shouldMute = Boolean(activeShare.value.sync.muted)
-    video.muted = shouldMute
-    sharedVideoMuted.value = shouldMute
-    sharedVideoUi.muted = shouldMute
-  }
 }
 
 function syncSharedVideoElementSource() {
@@ -3072,7 +3043,6 @@ function clearActiveShare() {
   pendingStreamShareFile.value = null
   lastVideoHeartbeatAt.value = 0
   sharedVideoMuted.value = true
-  sharedVideoHasLocalMuteOverride.value = false
   sharedVideoLocalPaused.value = false
   sharedVideoUi.muted = true
   webpageLoaded.value = false
