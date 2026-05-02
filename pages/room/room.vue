@@ -653,7 +653,7 @@
                 :src="activeShare.url"
                 class="shared-image"
                 :class="{ zoomed: activeShare.zoomed, readonly: !canControlShare }"
-                style="display: block; width: 100%; height: 100%; object-fit: contain;"
+                style="display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain;"
                 @click="toggleSharedImageZoom"
               />
 
@@ -662,7 +662,7 @@
                 ref="sharedVideoRef"
                 class="shared-video"
                 :src="getSharedVideoSource(activeShare)"
-                style="display: block; width: 100%; height: 100%; object-fit: contain;"
+                style="display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain;"
                 autoplay
                 :muted="shouldMuteSharedVideo(activeShare)"
                 playsinline
@@ -6472,10 +6472,10 @@ onUnmounted(() => {
 .shared-image,
 .shared-video {
   display: block;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
   object-fit: contain;
 }
 
