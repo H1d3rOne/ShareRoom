@@ -653,6 +653,7 @@
                 :src="activeShare.url"
                 class="shared-image"
                 :class="{ zoomed: activeShare.zoomed, readonly: !canControlShare }"
+                style="display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain;"
                 @click="toggleSharedImageZoom"
               />
 
@@ -661,6 +662,7 @@
                 ref="sharedVideoRef"
                 class="shared-video"
                 :src="getSharedVideoSource(activeShare)"
+                style="display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain;"
                 autoplay
                 :muted="shouldMuteSharedVideo(activeShare)"
                 playsinline
@@ -747,6 +749,19 @@
                 <div class="loader"></div>
                 <p>正在接收共享文件…</p>
               </div>
+              <button
+                v-if="sharedVideoPlayFailed"
+                type="button"
+                class="shared-video-play-overlay"
+                @click.stop="retrySharedVideoPlayback"
+              >
+                <span class="shared-video-play-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </span>
+                <span>点击播放共享画面</span>
+              </button>
             </div>
 
             <div class="share-badge" :title="getShareBadgeTitle(activeShare)">{{ getShareBadgeDisplayTitle(activeShare) }}</div>
@@ -1142,6 +1157,7 @@ const webpageUrlInputRef = ref(null)
 const webpageLoaded = ref(false)
 const webpageIframeLoadState = reactive({})
 const sharedVideoMuted = ref(true)
+const sharedVideoPlayFailed = ref(false)
 const sharedVideoHasLocalMuteOverride = ref(false)
 const sharedVideoLocalPaused = ref(false)
 const lastVideoHeartbeatAt = ref(0)
@@ -2133,6 +2149,20 @@ async function playSharedVideoSafely(options = {}) {
   }
 }
 
+async function retrySharedVideoPlayback() {
+  const video = sharedVideoRef.value
+  if (!video) {
+    return
+  }
+
+  video.muted = true
+  video.playsInline = true
+  sharedVideoMuted.value = true
+  sharedVideoUi.muted = true
+  const played = await playSharedVideoSafely({ source: '用户点击播放共享画面', force: true })
+  sharedVideoPlayFailed.value = !played
+}
+
 function isPeerConnected(peerId) {
   if (peerId === selfId.value) {
     return true
@@ -2866,6 +2896,27 @@ function captureSharedVideoState() {
   }
 }
 
+async function playIncomingSharedStream(video, stream, source) {
+  video.removeAttribute('src')
+  video.src = ''
+  video.muted = true
+  video.playsInline = true
+  sharedVideoMuted.value = true
+  sharedVideoUi.muted = true
+  sharedVideoPlayFailed.value = false
+
+  if (video.srcObject !== stream) {
+    video.srcObject = stream || null
+  }
+
+  if (!stream) {
+    return
+  }
+
+  const played = await playSharedVideoSafely({ source, force: true })
+  sharedVideoPlayFailed.value = !played
+}
+
 function syncSharedVideoElementSource() {
   const video = sharedVideoRef.value
   if (!video) {
@@ -2876,42 +2927,28 @@ function syncSharedVideoElementSource() {
     if (video.srcObject) {
       video.srcObject = null
     }
+    sharedVideoPlayFailed.value = false
     return
   }
 
   if (activeShare.value.kind === 'screen') {
-    video.removeAttribute('src')
     const nextStream = activeShare.value.ownerId === selfId.value
       ? sharedOutgoingStream.value
       : sharedIncomingStream.value
 
-    if (video.srcObject !== nextStream) {
-      video.srcObject = nextStream || null
-      if (nextStream) {
-        video.play().catch((error) => {
-          console.error('挂载屏幕共享流后自动播放失败:', error)
-        })
-      }
-    }
+    playIncomingSharedStream(video, nextStream, '播放屏幕共享流')
     return
   }
 
   if (isStreamShare() && activeShare.value.ownerId !== selfId.value) {
-    video.removeAttribute('src')
-    if (video.srcObject !== sharedIncomingStream.value) {
-      video.srcObject = sharedIncomingStream.value || null
-      if (sharedIncomingStream.value) {
-        video.play().catch((error) => {
-          console.error('挂载实时视频流后自动播放失败:', error)
-        })
-      }
-    }
+    playIncomingSharedStream(video, sharedIncomingStream.value, '播放实时视频流')
     return
   }
 
   if (video.srcObject) {
     video.srcObject = null
   }
+  sharedVideoPlayFailed.value = false
 }
 
 function resetSharedVideoTransport() {
@@ -3528,6 +3565,7 @@ async function connectIncomingLivekitShare(media) {
           return
         }
         sharedIncomingStream.value = new MediaStream([mediaTrack])
+        sharedVideoPlayFailed.value = false
         nextTick(() => {
           syncSharedVideoElementSource()
         })
@@ -6011,6 +6049,10 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+body {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
 .container {
   position: relative;
   min-height: 100vh;
@@ -6374,20 +6416,65 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 0;
-  min-height: 0;
-}
-
-.shared-image,
-.shared-video {
-  display: block;
-  max-width: 100%;
-  max-height: 100%;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
-  object-fit: contain;
+  contain: paint;
+}
+
+.share-content-frame :deep(img),
+.share-content-frame :deep(video),
+.shared-stage :deep(.shared-image),
+.shared-stage :deep(.shared-video),
+.shared-image,
+.shared-video {
+  display: block;
+  flex: 0 1 100%;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  object-fit: contain !important;
+  object-position: center center;
+}
+
+.shared-video-play-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 44px;
+  min-height: 44px;
+  color: #f8fafc;
+  background: rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+
+.shared-video-play-icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(124, 58, 237, 0.95));
+  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.28);
+}
+
+.shared-video-play-icon svg {
+  width: 26px;
+  height: 26px;
+  fill: currentColor;
+  margin-left: 3px;
 }
 
 .webpage-share-container {
@@ -8943,15 +9030,16 @@ onUnmounted(() => {
 
 @media (max-width: 720px) {
   .header {
-    margin: 16px 16px 0;
-    padding: 18px;
+    margin: calc(12px + env(safe-area-inset-top)) 12px 0;
+    padding: 16px;
+    border-radius: 22px;
     flex-direction: column;
     align-items: stretch;
   }
 
   .content {
-    padding-left: 16px;
-    padding-right: 16px;
+    gap: 14px;
+    padding: 16px 12px calc(18px + env(safe-area-inset-bottom));
   }
 
   .room-title-row,
@@ -8962,25 +9050,89 @@ onUnmounted(() => {
     align-items: flex-start;
   }
 
+  .room-title {
+    font-size: clamp(24px, 7vw, 32px);
+  }
+
+  .room-hint,
+  .section-caption {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .participant-chip,
+  .section-state {
+    min-height: 36px;
+  }
+
   .stage-shell {
-    padding: 12px;
+    padding: 10px;
+    border-radius: 22px;
   }
 
   .shared-stage {
-    height: 320px;
+    height: clamp(240px, 60svw, 360px);
+    min-height: 240px;
+    border-radius: 22px;
   }
 
   .shared-stage.game-mode {
     height: clamp(420px, 72svh, 620px);
   }
 
-  .share-toolbar {
+  .share-toolbar,
+  .share-toolbar-actions,
+  .share-actions {
     align-items: stretch;
+  }
+
+  .share-toolbar-actions,
+  .share-actions,
+  .game-home-actions,
+  .landlord-actions {
+    width: 100%;
+  }
+
+  .share-toolbar-actions > *,
+  .share-actions > *,
+  .game-home-actions > *,
+  .landlord-actions > * {
+    flex: 1 1 160px;
+  }
+
+  .primary-btn,
+  .secondary-btn,
+  .ghost-btn,
+  .leave-btn,
+  .device-toggle,
+  .chat-send-btn,
+  .share-close-trigger,
+  .share-close-btn,
+  .webpage-nav-btn,
+  .control-pill,
+  input,
+  textarea {
+    min-height: 44px;
   }
 
   .share-footer {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
+    padding: 18px 14px 14px;
+  }
+
+  .share-badge {
+    top: 12px;
+    left: 12px;
+    max-width: calc(100% - 24px);
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .share-close-drawer {
+    bottom: calc(12px + env(safe-area-inset-bottom));
   }
 
   .game-panel-header,
@@ -9027,6 +9179,14 @@ onUnmounted(() => {
     padding: 14px;
   }
 
+  .video-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .video-tile {
+    min-height: 180px;
+  }
+
   .chat-input {
     grid-template-columns: 1fr;
   }
@@ -9040,6 +9200,69 @@ onUnmounted(() => {
   .game-seat-grid.two-seat,
   .game-seat-grid.three-seat {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    margin-inline: 8px;
+    padding: 14px;
+    border-radius: 20px;
+  }
+
+  .content {
+    padding-inline: 8px;
+    gap: 12px;
+  }
+
+  .shared-overview {
+    gap: 10px;
+  }
+
+  .stage-shell,
+  .panel,
+  .game-panel {
+    border-radius: 20px;
+  }
+
+  .shared-stage {
+    height: clamp(220px, 66svw, 300px);
+    min-height: 220px;
+    border-radius: 18px;
+  }
+
+  .share-toolbar {
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .share-toolbar-actions > *,
+  .share-actions > * {
+    flex-basis: 100%;
+  }
+
+  .share-footer {
+    padding-inline: 12px;
+  }
+
+  .shared-video-play-icon {
+    width: 52px;
+    height: 52px;
+  }
+
+  .video-tile {
+    min-height: 160px;
+    border-radius: 18px;
+  }
+
+  .chat-input {
+    padding: 8px;
+    border-radius: 16px;
+  }
+
+  .device-toggle {
+    width: 44px;
+    height: 44px;
   }
 }
 
