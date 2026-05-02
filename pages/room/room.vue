@@ -1262,7 +1262,9 @@ const participantsWithVideo = computed(() => {
   return otherParticipants.value.filter((peer) => {
     const stream = remoteStreams[peer.id]
     if (!stream || !hasLiveVideoTrack(stream)) return false
-    // 排除共享流：如果该 peer 是共享者且该流就是共享流，则不在宫格显示
+    // 排除共享流：如果该流已被绑定为共享流，不在宫格显示
+    if (sharedIncomingStream.value && stream === sharedIncomingStream.value) return false
+    // 排除共享流：如果该 peer 是共享者且该流 ID 匹配共享流 ID
     if (isStreamShare(activeShare.value) && activeShare.value.ownerId === peer.id) {
       const sharedStreamId = sharedIncomingStream.value?.id || activeShare.value.streamId
       if (sharedStreamId && stream.id === sharedStreamId) return false
@@ -2910,11 +2912,13 @@ function captureSharedVideoState() {
 async function playIncomingSharedStream(video, stream, source) {
   video.removeAttribute('src')
   video.src = ''
-  video.muted = true
   video.playsInline = true
+  sharedVideoPlayFailed.value = false
+
+  // 先静音确保自动播放不被浏览器阻止
+  video.muted = true
   sharedVideoMuted.value = true
   sharedVideoUi.muted = true
-  sharedVideoPlayFailed.value = false
 
   if (video.srcObject !== stream) {
     video.srcObject = stream || null
@@ -2926,6 +2930,14 @@ async function playIncomingSharedStream(video, stream, source) {
 
   const played = await playSharedVideoSafely({ source, force: true })
   sharedVideoPlayFailed.value = !played
+
+  // 播放成功后，根据同步状态恢复声音
+  if (played && activeShare.value?.sync) {
+    const shouldMute = Boolean(activeShare.value.sync.muted)
+    video.muted = shouldMute
+    sharedVideoMuted.value = shouldMute
+    sharedVideoUi.muted = shouldMute
+  }
 }
 
 function syncSharedVideoElementSource() {
@@ -3148,9 +3160,15 @@ function bindRemoteVideo(peerId, element) {
 
 function syncRemoteVideo(peerId) {
   const element = remoteVideoElements[peerId]
-  const stream = remoteStreams[peerId]
+  let stream = remoteStreams[peerId]
   if (!element) {
     return
+  }
+
+  // 防护：如果该流是共享流，不要绑定到 video-grid
+  if (stream && sharedIncomingStream.value && stream === sharedIncomingStream.value) {
+    delete remoteStreams[peerId]
+    stream = null
   }
 
   if (element.srcObject !== stream) {
@@ -3209,18 +3227,27 @@ function pickPrimaryPeerStream(peerId) {
     return null
   }
 
+  // 始终排除已绑定的共享流
+  const sharedStreamId = sharedIncomingStream.value?.id || (isStreamShare(activeShare.value) && activeShare.value?.ownerId === peerId ? activeShare.value.streamId : null)
+
   if (
     isVideoLikeShare(activeShare.value)
     && activeShare.value.ownerId === peerId
     && isStreamShare(activeShare.value)
   ) {
     return streams.find((stream) => (
-      stream.id !== (sharedIncomingStream.value?.id || activeShare.value.streamId)
+      stream.id !== sharedStreamId
+      && stream !== sharedIncomingStream.value
       && isLiveStreamCandidate(stream)
     )) || null
   }
 
-  return streams.find((stream) => isLiveStreamCandidate(stream)) || streams[0]
+  // 即使不是流式共享的拥有者，也要排除共享流
+  return streams.find((stream) => (
+    stream !== sharedIncomingStream.value
+    && (sharedStreamId ? stream.id !== sharedStreamId : true)
+    && isLiveStreamCandidate(stream)
+  )) || streams.find((stream) => stream !== sharedIncomingStream.value) || streams[0]
 }
 
 function tryBindSharedIncomingStream(peerId) {
@@ -3270,6 +3297,7 @@ function tryBindSharedIncomingStream(peerId) {
     syncSharedVideoElementSource()
     markIncomingStreamHealthy()
   })
+  refreshPeerDisplayStream(peerId)
   return true
 }
 
