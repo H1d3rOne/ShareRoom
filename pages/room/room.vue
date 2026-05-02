@@ -653,7 +653,7 @@
                 :src="activeShare.url"
                 class="shared-image"
                 :class="{ zoomed: activeShare.zoomed, readonly: !canControlShare }"
-                style="display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain;"
+                style="display: block; width: 100%; height: 100%; object-fit: contain;"
                 @click="toggleSharedImageZoom"
               />
 
@@ -662,7 +662,7 @@
                 ref="sharedVideoRef"
                 class="shared-video"
                 :src="getSharedVideoSource(activeShare)"
-                style="display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain;"
+                style="display: block; width: 100%; height: 100%; object-fit: contain;"
                 autoplay
                 :muted="shouldMuteSharedVideo(activeShare)"
                 playsinline
@@ -3091,10 +3091,10 @@ function openIncomingShare(media) {
     sync: media.sync || (media.kind === 'video'
       ? {
           action: 'ready',
-          playing: false,
+          playing: true,
           currentTime: 0,
           duration: Number(media.duration || 0),
-          muted: true,
+          muted: false,
           updatedAt: Date.now(),
           controllerId: media.ownerId
         }
@@ -3476,9 +3476,10 @@ function startFileShare(file, kind) {
     sync: kind === 'video'
       ? {
           action: 'ready',
-          playing: false,
+          playing: true,
           currentTime: 0,
           duration: 0,
+          muted: false,
           updatedAt: Date.now(),
           controllerId: selfId.value
         }
@@ -6434,13 +6435,10 @@ onUnmounted(() => {
 .shared-image,
 .shared-video {
   display: block;
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 100%;
+  width: 100%;
+  height: 100%;
   min-width: 0;
   min-height: 0;
-  aspect-ratio: auto;
   object-fit: contain;
 }
 

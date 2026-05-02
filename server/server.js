@@ -1913,10 +1913,10 @@ io.on('connection', (socket) => {
       sync: kind === 'video'
         ? {
             action: 'ready',
-            playing: false,
+            playing: true,
             currentTime: 0,
             duration: Number(payload.media.duration) || 0,
-            muted: true,
+            muted: false,
             updatedAt: Date.now(),
             controllerId: socket.id
           }
