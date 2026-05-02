@@ -653,7 +653,7 @@
                 :src="activeShare.url"
                 class="shared-image"
                 :class="{ zoomed: activeShare.zoomed, readonly: !canControlShare }"
-                style="display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain;"
+                style="display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain;"
                 @click="toggleSharedImageZoom"
               />
 
@@ -662,7 +662,7 @@
                 ref="sharedVideoRef"
                 class="shared-video"
                 :src="getSharedVideoSource(activeShare)"
-                style="display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain;"
+                style="display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain;"
                 autoplay
                 :muted="shouldMuteSharedVideo(activeShare)"
                 playsinline
@@ -811,7 +811,6 @@
                   <button
                     class="control-pill volume-btn"
                     :class="{ muted: sharedVideoMuted }"
-                    :disabled="!canLocalControlSharedVideo"
                     @click="toggleSharedVideoMute"
                     :title="sharedVideoMuted ? '开启声音' : '静音'"
                   >
@@ -1235,8 +1234,8 @@ const DATA_CHANNEL_BUFFER_LIMIT = 1024 * 1024
 const VIDEO_PREVIEW_MIN_BYTES = 1024 * 1024
 const VIDEO_PREVIEW_UPDATE_BYTES = 1024 * 1024
 const VIDEO_PREVIEW_UPDATE_INTERVAL = 800
-const STREAM_RESYNC_STALL_MS = 4500
-const STREAM_RESYNC_COOLDOWN_MS = 5000
+const STREAM_RESYNC_STALL_MS = 8000
+const STREAM_RESYNC_COOLDOWN_MS = 12000
 const GOMOKU_BOARD_SIZE = 15
 const LANDLORD_REQUIRED_PLAYERS = 3
 const LANDLORD_INVITEE_COUNT = LANDLORD_REQUIRED_PLAYERS - 1
@@ -2238,6 +2237,9 @@ function syncSharedVideoUiFromState(sync = activeShare.value?.sync) {
   const syncedMuted = Boolean(sync.muted ?? true)
   if (canGlobalControlShare.value || !sharedVideoHasLocalMuteOverride.value) {
     sharedVideoMuted.value = syncedMuted
+  }
+  if (canGlobalControlShare.value && !syncedMuted) {
+    sharedVideoHasLocalMuteOverride.value = false
   }
   sharedVideoUi.muted = canGlobalControlShare.value ? syncedMuted : sharedVideoMuted.value
   if (sharedVideoRef.value) {
@@ -3560,14 +3562,23 @@ async function connectIncomingLivekitShare(media) {
       url: tokenPayload.url,
       token: tokenPayload.token,
       onTrack: (track) => {
-        const mediaTrack = track?.mediaStreamTrack || track
-        if (!mediaTrack || mediaTrack.kind !== 'video') {
+        if (!track || track.kind !== 'video') {
           return
         }
-        sharedIncomingStream.value = new MediaStream([mediaTrack])
+        const video = sharedVideoRef.value
+        if (!video) {
+          return
+        }
         sharedVideoPlayFailed.value = false
-        nextTick(() => {
+        track.attach(video).then(() => {
+          video.muted = true
+          video.playsInline = true
+          sharedVideoMuted.value = true
+          sharedVideoUi.muted = true
           syncSharedVideoElementSource()
+        }).catch((error) => {
+          console.error('livekit track attach failed:', error)
+          sharedVideoPlayFailed.value = true
         })
       }
     })
@@ -6414,9 +6425,6 @@ onUnmounted(() => {
   justify-content: center;
   width: 100%;
   height: 100%;
-  min-width: 0;
-  min-height: 0;
-  contain: paint;
 }
 
 .share-content-frame :deep(img),
@@ -6426,15 +6434,14 @@ onUnmounted(() => {
 .shared-image,
 .shared-video {
   display: block;
-  flex: 0 1 100%;
-  width: 100%;
-  height: 100%;
+  width: auto;
+  height: auto;
   max-width: 100%;
   max-height: 100%;
   min-width: 0;
   min-height: 0;
-  object-fit: contain !important;
-  object-position: center center;
+  aspect-ratio: auto;
+  object-fit: contain;
 }
 
 .shared-video-play-overlay {

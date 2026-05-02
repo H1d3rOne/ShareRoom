@@ -323,3 +323,30 @@ test('实时视频共享会在 loadedmetadata\\/canplay 阶段预建共享流，
 test('共享流健康检查只在全局播放中才判定 stall 并请求重同步，避免长视频暂停或预备阶段来回重复播放', () => {
   assert.match(roomVue, /function restartIncomingStreamHealthMonitor\(\) \{[\s\S]*if \([\s\S]*!share\.sync\?\.playing[\s\S]*incomingStreamHealth\.lastFrameCount = frameCount[\s\S]*incomingStreamHealth\.lastCurrentTime = currentTime[\s\S]*incomingStreamHealth\.lastProgressAt = Date\.now\(\)[\s\S]*return/)
 })
+
+test('实时流视频在共享区域内按比例适配，长宽均不超过容器', () => {
+  assert.match(roomVue, /object-fit:\s*contain/)
+  assert.match(roomVue, /max-width:\s*100%;[^}]*max-height:\s*100%/)
+  assert.doesNotMatch(roomVue, /style="[^"]*width:\s*100%[^"]*"[^>]*class="shared-video"/)
+  assert.match(roomVue, /\.shared-video\s*\{[^}]*width:\s*auto/)
+  assert.match(roomVue, /\.shared-video\s*\{[^}]*height:\s*auto/)
+})
+
+test('移动端视频不会因自动播放策略黑屏，srcObject 挂载后使用 playSharedVideoSafely 确保播放', () => {
+  assert.match(roomVue, /async function playIncomingSharedStream\(video, stream, source\) \{[\s\S]*playSharedVideoSafely\(\{ source, force: true \}\)/)
+  assert.match(roomVue, /playIncomingSharedStream\(video, sharedIncomingStream\.value, '播放实时视频流'\)/)
+})
+
+test('管理员声音按钮是全局同步的，普通成员声音按钮只控制本地静音状态', () => {
+  assert.match(roomVue, /class="control-pill volume-btn"[^<]*@click="toggleSharedVideoMute"/)
+  assert.doesNotMatch(roomVue, /class="control-pill volume-btn"[^>]*:disabled="!canLocalControlSharedVideo"/)
+  assert.match(roomVue, /if \(!canGlobalControlShare\.value\) \{[\s\S]*sharedVideoHasLocalMuteOverride\.value = true/)
+  assert.match(roomVue, /if \(canGlobalControlShare\.value && activeShare\.value\?\.kind === 'video'\) \{[\s\S]*emitShareControl\('mute'/)
+})
+
+test('共享流同步心跳间隔和 resync 判定门槛足够大，不会频繁打断视频播放', () => {
+  const resyncStallMs = roomVue.match(/STREAM_RESYNC_STALL_MS\s*=\s*(\d+)/)?.[1]
+  const resyncCooldownMs = roomVue.match(/STREAM_RESYNC_COOLDOWN_MS\s*=\s*(\d+)/)?.[1]
+  assert.ok(Number(resyncStallMs) >= 6000, `STREAM_RESYNC_STALL_MS should >= 6000, got ${resyncStallMs}`)
+  assert.ok(Number(resyncCooldownMs) >= 8000, `STREAM_RESYNC_COOLDOWN_MS should >= 8000, got ${resyncCooldownMs}`)
+})
