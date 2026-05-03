@@ -762,6 +762,11 @@
                 </span>
                 <span>点击播放共享画面</span>
               </button>
+              <img
+                v-if="sharedVideoPausedFrameUrl"
+                :src="sharedVideoPausedFrameUrl"
+                class="shared-video-paused-frame"
+              />
             </div>
 
             <div class="share-badge" :title="getShareBadgeTitle(activeShare)">{{ getShareBadgeDisplayTitle(activeShare) }}</div>
@@ -1158,6 +1163,7 @@ const webpageIframeLoadState = reactive({})
 const sharedVideoMuted = ref(true)
 const sharedVideoPlayFailed = ref(false)
 const sharedVideoLocalPaused = ref(false)
+const sharedVideoPausedFrameUrl = ref('')
 const lastVideoHeartbeatAt = ref(0)
 const lastRemotePointerSentAt = ref(0)
 const sharedOutgoingStream = ref(null)
@@ -2046,6 +2052,28 @@ function toggleSharedVideoMute() {
   }
 }
 
+function captureSharedVideoFrame() {
+  const video = sharedVideoRef.value
+  if (!video || !video.videoWidth || !video.videoHeight) {
+    sharedVideoPausedFrameUrl.value = ''
+    return
+  }
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    sharedVideoPausedFrameUrl.value = canvas.toDataURL('image/jpeg', 0.85)
+  } catch (error) {
+    sharedVideoPausedFrameUrl.value = ''
+  }
+}
+
+function clearSharedVideoPausedFrame() {
+  sharedVideoPausedFrameUrl.value = ''
+}
+
 function toggleSharedStageFullscreen() {
   const stage = sharedStageRef.value
   if (!stage) return
@@ -2905,6 +2933,10 @@ async function playIncomingSharedStream(video, stream, source) {
   }
 
   if (video.srcObject !== stream) {
+    // 本地暂停时先截取当前帧，避免 srcObject 变更后黑屏
+    if (!canGlobalControlShare.value && sharedVideoLocalPaused.value && isStreamShare()) {
+      captureSharedVideoFrame()
+    }
     video.srcObject = stream || null
   }
 
@@ -3054,6 +3086,7 @@ function clearActiveShare() {
   lastVideoHeartbeatAt.value = 0
   sharedVideoMuted.value = true
   sharedVideoLocalPaused.value = false
+  sharedVideoPausedFrameUrl.value = ''
   sharedVideoUi.muted = true
   webpageLoaded.value = false
   Object.keys(webpageIframeLoadState).forEach((key) => {
@@ -3589,6 +3622,10 @@ async function connectIncomingLivekitShare(media) {
         }
         sharedVideoPlayFailed.value = false
         const wasUserUnmuted = !sharedVideoMuted.value
+        const wasLocalPaused = !canGlobalControlShare.value && sharedVideoLocalPaused.value
+        if (wasLocalPaused) {
+          captureSharedVideoFrame()
+        }
         track.attach(video).then(() => {
           video.playsInline = true
           if (!wasUserUnmuted) {
@@ -3596,10 +3633,11 @@ async function connectIncomingLivekitShare(media) {
             sharedVideoMuted.value = true
             sharedVideoUi.muted = true
           }
-          if (!canGlobalControlShare.value && sharedVideoLocalPaused.value) {
+          if (wasLocalPaused) {
             video.pause()
             return
           }
+          clearSharedVideoPausedFrame()
           syncSharedVideoElementSource()
         }).catch((error) => {
           console.error('livekit track attach failed:', error)
@@ -5673,12 +5711,16 @@ function applyVideoSync(sync, forceSeek = false) {
   }
 
   if (sync.playing) {
+    clearSharedVideoPausedFrame()
     if (video.paused || video.ended || forceSeek) {
       playSharedVideoSafely({ source: '同步播放', force: forceSeek })
     }
   } else {
     cancelSharedVideoPlayRequest()
     video.pause()
+    if (isStreamShare()) {
+      captureSharedVideoFrame()
+    }
   }
 
   restartSharedVideoUiTicker()
@@ -5741,10 +5783,14 @@ function handleSharedVideoCanPlay() {
 
 function handleSharedVideoPlaying() {
   markIncomingStreamHealthy()
+  clearSharedVideoPausedFrame()
 
   // 非管理员本地暂停时，浏览器 autoplay 可能触发 playing 事件，需重新暂停
   if (!canGlobalControlShare.value && sharedVideoLocalPaused.value && sharedVideoRef.value) {
     sharedVideoRef.value.pause()
+    if (isStreamShare()) {
+      captureSharedVideoFrame()
+    }
     return
   }
 
@@ -5897,6 +5943,7 @@ function toggleSharedVideoPlayback() {
       return
     }
     sharedVideoLocalPaused.value = false
+    clearSharedVideoPausedFrame()
     const syncedTime = getVideoSyncTime(activeShare.value.sync)
     try {
       sharedVideoRef.value.currentTime = Math.min(syncedTime, sharedVideoRef.value.duration || syncedTime)
@@ -5914,6 +5961,9 @@ function toggleSharedVideoPlayback() {
   sharedVideoUi.playing = false
   cancelSharedVideoPlayRequest()
   sharedVideoRef.value.pause()
+  if (isStreamShare()) {
+    captureSharedVideoFrame()
+  }
 }
 
 function handleSharedVideoProgressInput(event) {
@@ -6536,6 +6586,16 @@ onUnmounted(() => {
   height: 26px;
   fill: currentColor;
   margin-left: 3px;
+}
+
+.shared-video-paused-frame {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
 }
 
 .webpage-share-container {
