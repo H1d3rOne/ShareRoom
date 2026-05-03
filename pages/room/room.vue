@@ -2896,9 +2896,18 @@ async function playIncomingSharedStream(video, stream, source) {
     return
   }
 
-  video.removeAttribute('src')
-  video.src = ''
-  video.playsInline = true
+  // 流已正确连接且正在播放时，不需要重置
+  if (video.srcObject === stream && !video.paused && !video.ended) {
+    return
+  }
+
+  if (video.srcObject !== stream) {
+    video.removeAttribute('src')
+    video.src = ''
+    video.playsInline = true
+    video.srcObject = stream || null
+  }
+
   sharedVideoPlayFailed.value = false
 
   // 先静音确保自动播放不被浏览器阻止（仅首次，之后保留用户设置）
@@ -2907,10 +2916,6 @@ async function playIncomingSharedStream(video, stream, source) {
     video.muted = true
     sharedVideoMuted.value = true
     sharedVideoUi.muted = true
-  }
-
-  if (video.srcObject !== stream) {
-    video.srcObject = stream || null
   }
 
   if (!stream) {
@@ -5897,8 +5902,6 @@ function toggleSharedVideoPlayback() {
       return
     }
     sharedVideoLocalPaused.value = false
-    // 恢复播放时重新同步视频源（暂停期间可能跳过了 srcObject 更新）
-    syncSharedVideoElementSource()
     const syncedTime = getVideoSyncTime(activeShare.value.sync)
     try {
       sharedVideoRef.value.currentTime = Math.min(syncedTime, sharedVideoRef.value.duration || syncedTime)
