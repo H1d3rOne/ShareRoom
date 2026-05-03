@@ -931,6 +931,7 @@
                 autoplay playsinline
               ></video>
               <UserAvatar v-if="!hasPeerVideo(peer.id)" :avatar-id="peer.avatarId" :name="peer.name" :size="64" />
+              <div v-if="peerAudioLevels[peer.id] > 0.05" class="speaking-ring"></div>
               <div v-if="hasPeerAudio(peer.id)" class="member-mic-indicator" :class="{ 'mic-active': peerAudioLevels[peer.id] > 0.05 }">
                 <svg class="member-mic-icon" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 14a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v4a3 3 0 0 0 3 3Z" />
@@ -3388,11 +3389,7 @@ function startPeerAudioMonitor(peerId, stream) {
     const source = ctx.createMediaStreamSource(stream)
     const analyser = ctx.createAnalyser()
     analyser.fftSize = 256
-    const silentGain = ctx.createGain()
-    silentGain.gain.value = 0
     source.connect(analyser)
-    analyser.connect(silentGain)
-    silentGain.connect(ctx.destination)
     peerAudioContexts[peerId] = ctx
     peerAudioAnalysers[peerId] = analyser
     peerAudioLevels[peerId] = 0
@@ -3453,12 +3450,7 @@ function startLocalAudioMonitor(peerId, stream) {
     const source = ctx.createMediaStreamSource(stream)
     const analyser = ctx.createAnalyser()
     analyser.fftSize = 256
-    // 通过静音增益节点连接到 destination，确保 analyser 能获取数据
-    const silentGain = ctx.createGain()
-    silentGain.gain.value = 0
     source.connect(analyser)
-    analyser.connect(silentGain)
-    silentGain.connect(ctx.destination)
     peerAudioContexts[peerId] = ctx
     peerAudioAnalysers[peerId] = analyser
     peerAudioLevels[peerId] = 0
@@ -8979,25 +8971,24 @@ onUnmounted(() => {
   border-width: 2px;
 }
 
-.member-card.speaking::after {
-  content: '';
+.speaking-ring {
   position: absolute;
-  inset: -4px;
-  border-radius: 22px;
-  border: 3px solid rgba(34, 197, 94, 0.6);
-  animation: speaking-ripple 1.4s ease-out infinite;
+  inset: 0;
+  border-radius: 20px;
+  border: 3px solid rgba(34, 197, 94, 0.7);
+  animation: speaking-ripple 1.2s ease-in-out infinite;
   pointer-events: none;
-  z-index: 5;
+  z-index: 4;
 }
 
 @keyframes speaking-ripple {
-  0% {
-    opacity: 1;
-    transform: scale(1);
+  0%, 100% {
+    opacity: 0.6;
+    box-shadow: inset 0 0 12px rgba(34, 197, 94, 0.3), 0 0 8px rgba(34, 197, 94, 0.25);
   }
-  100% {
-    opacity: 0;
-    transform: scale(1.18);
+  50% {
+    opacity: 1;
+    box-shadow: inset 0 0 24px rgba(34, 197, 94, 0.5), 0 0 18px rgba(34, 197, 94, 0.5);
   }
 }
 
