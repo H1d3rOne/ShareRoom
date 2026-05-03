@@ -935,27 +935,37 @@
             </div>
             <button type="button" class="tiny-btn" @click="closeInvitePicker">取消</button>
           </div>
-          <div class="participant-list">
+          <div class="member-grid">
             <div
-              class="participant-item"
-              :class="{ 'invite-target': canInvitePeerFromList(peer), 'seat-assigned': Boolean(getParticipantSeatLabel(peer.id)) }"
+              class="member-card"
+              :class="{ speaking: peerAudioLevels[peer.id] > 0.05, 'invite-target': canInvitePeerFromList(peer), 'seat-assigned': Boolean(getParticipantSeatLabel(peer.id)) }"
               v-for="peer in participants"
               :key="peer.id"
             >
-              <div class="participant-main">
-                <UserAvatar :avatar-id="peer.avatarId" :name="peer.name" :size="38" />
-                <div class="participant-copy">
-                  <span>{{ peer.name }}</span>
-                  <div class="participant-tags">
-                    <span class="participant-tag">
-                      {{ peer.isSuperAdmin ? '超级管理员' : peer.isAdmin ? '管理员' : peer.id === selfId ? '我' : isPeerConnected(peer.id) ? '已连接' : '连接中' }}
-                    </span>
-                    <span v-if="peer.isController" class="participant-tag controller-tag">远控中</span>
-                    <span v-if="getParticipantSeatLabel(peer.id)" class="participant-tag seat-tag">{{ getParticipantSeatLabel(peer.id) }}</span>
-                  </div>
-                </div>
+              <video
+                v-if="hasPeerVideo(peer.id)"
+                :ref="(el) => bindMemberVideo(peer.id, el)"
+                class="member-video"
+                autoplay playsinline muted
+              ></video>
+              <UserAvatar v-else :avatar-id="peer.avatarId" :name="peer.name" :size="64" />
+              <div v-if="hasPeerAudio(peer.id)" class="member-mic-indicator" :class="{ 'mic-active': peerAudioLevels[peer.id] > 0.05 }">
+                <svg class="member-mic-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 14a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v4a3 3 0 0 0 3 3Z" />
+                  <path d="M5 11a7 7 0 0 0 14 0" />
+                  <path d="M12 18v3" />
+                </svg>
               </div>
-              <div class="participant-actions">
+              <div class="member-badge" v-if="peer.isSuperAdmin || peer.isAdmin || peer.isController || getParticipantSeatLabel(peer.id)">
+                <span v-if="peer.isSuperAdmin" class="member-badge-tag super">超管</span>
+                <span v-else-if="peer.isAdmin" class="member-badge-tag admin">管理</span>
+                <span v-if="peer.isController" class="member-badge-tag ctrl">远控</span>
+                <span v-if="getParticipantSeatLabel(peer.id)" class="member-badge-tag seat">{{ getParticipantSeatLabel(peer.id) }}</span>
+              </div>
+              <div class="member-name">
+                <span>{{ peer.name }}</span>
+              </div>
+              <div class="member-actions-overlay">
                 <button
                   v-if="canInvitePeerFromList(peer)"
                   type="button"
@@ -1193,6 +1203,11 @@ const dataChannels = reactive({})
 const remoteStreams = reactive({})
 const remoteVideoElements = reactive({})
 const peerStreamCatalog = reactive({})
+const memberVideoElements = reactive({})
+const peerAudioLevels = reactive({})
+const peerAudioContexts = {}
+const peerAudioAnalysers = {}
+let audioLevelRafId = null
 const makingOffer = reactive({})
 const ignoreOffer = reactive({})
 const isSettingRemoteAnswerPending = reactive({})
@@ -3299,6 +3314,130 @@ function refreshPeerDisplayStream(peerId) {
     delete remoteStreams[peerId]
   }
   syncRemoteVideo(peerId)
+  syncMemberVideo(peerId)
+  managePeerAudioMonitor(peerId)
+}
+
+function hasPeerAudio(peerId) {
+  const stream = peerId === selfId.value ? localMediaStream.value : remoteStreams[peerId]
+  return Boolean(stream?.getAudioTracks().some((t) => t.readyState === 'live'))
+}
+
+function hasPeerVideo(peerId) {
+  const stream = peerId === selfId.value ? localMediaStream.value : remoteStreams[peerId]
+  return hasLiveVideoTrack(stream)
+}
+
+function bindMemberVideo(peerId, element) {
+  if (!element) {
+    delete memberVideoElements[peerId]
+    return
+  }
+  memberVideoElements[peerId] = element
+  syncMemberVideo(peerId)
+}
+
+function syncMemberVideo(peerId) {
+  const element = memberVideoElements[peerId]
+  const stream = peerId === selfId.value ? localMediaStream.value : remoteStreams[peerId]
+  if (!element) return
+  if (element.srcObject !== stream) {
+    element.srcObject = stream || null
+  }
+  if (stream && element.paused) {
+    element.play().catch(() => {})
+  }
+}
+
+function managePeerAudioMonitor(peerId) {
+  const stream = remoteStreams[peerId]
+  const hasAudio = Boolean(stream?.getAudioTracks().some((t) => t.readyState === 'live'))
+  if (hasAudio) {
+    startPeerAudioMonitor(peerId, stream)
+  } else {
+    stopPeerAudioMonitor(peerId)
+  }
+}
+
+function startPeerAudioMonitor(peerId, stream) {
+  if (peerAudioContexts[peerId]) return
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    const source = ctx.createMediaStreamSource(stream)
+    const analyser = ctx.createAnalyser()
+    analyser.fftSize = 256
+    source.connect(analyser)
+    analyser.connect(ctx.destination)
+    peerAudioContexts[peerId] = ctx
+    peerAudioAnalysers[peerId] = analyser
+    peerAudioLevels[peerId] = 0
+    if (!audioLevelRafId) {
+      tickAudioLevels()
+    }
+  } catch (e) {
+    // ignore AudioContext errors
+  }
+}
+
+function stopPeerAudioMonitor(peerId) {
+  const ctx = peerAudioContexts[peerId]
+  if (ctx) {
+    try { ctx.close() } catch (e) {}
+    delete peerAudioContexts[peerId]
+  }
+  delete peerAudioAnalysers[peerId]
+  delete peerAudioLevels[peerId]
+}
+
+function tickAudioLevels() {
+  const dataArray = new Uint8Array(128)
+  let hasAny = false
+  for (const peerId of Object.keys(peerAudioAnalysers)) {
+    const analyser = peerAudioAnalysers[peerId]
+    if (!analyser) continue
+    hasAny = true
+    analyser.getByteFrequencyData(dataArray)
+    let sum = 0
+    for (let i = 0; i < dataArray.length; i++) sum += dataArray[i]
+    const avg = sum / dataArray.length / 255
+    peerAudioLevels[peerId] = avg > 0.02 ? avg : 0
+  }
+  if (hasAny) {
+    audioLevelRafId = requestAnimationFrame(tickAudioLevels)
+  } else {
+    audioLevelRafId = null
+  }
+}
+
+function manageLocalAudioMonitor() {
+  const sid = selfId.value
+  const stream = localMediaStream.value
+  const hasAudio = Boolean(stream?.getAudioTracks().some((t) => t.readyState === 'live'))
+  if (hasAudio) {
+    startLocalAudioMonitor(sid, stream)
+  } else {
+    stopPeerAudioMonitor(sid)
+  }
+}
+
+function startLocalAudioMonitor(peerId, stream) {
+  if (peerAudioContexts[peerId]) return
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    const source = ctx.createMediaStreamSource(stream)
+    const analyser = ctx.createAnalyser()
+    analyser.fftSize = 256
+    source.connect(analyser)
+    // 不连接 destination，避免本地回声
+    peerAudioContexts[peerId] = ctx
+    peerAudioAnalysers[peerId] = analyser
+    peerAudioLevels[peerId] = 0
+    if (!audioLevelRafId) {
+      tickAudioLevels()
+    }
+  } catch (e) {
+    // ignore
+  }
 }
 
 function syncLocalVideo() {
@@ -3308,6 +3447,7 @@ function syncLocalVideo() {
       localVideoRef.value.play().catch(() => {})
     }
   }
+  syncMemberVideo(selfId.value)
 }
 
 function syncRemoteAudioPlayback() {
@@ -3351,6 +3491,8 @@ function attachLocalTrack(track) {
 
   stream.addTrack(track)
   updateLocalMediaFlags()
+  syncMemberVideo(selfId.value)
+  manageLocalAudioMonitor()
 }
 
 function removeLocalTrack(kind) {
@@ -3372,6 +3514,8 @@ function removeLocalTrack(kind) {
   }
 
   updateLocalMediaFlags()
+  syncMemberVideo(selfId.value)
+  manageLocalAudioMonitor()
 }
 
 function ensurePeerSenderCache(store, peerId) {
@@ -4484,6 +4628,13 @@ function cleanupPeerConnection(peerId) {
     videoElement.srcObject = null
   }
 
+  const memberElement = memberVideoElements[peerId]
+  if (memberElement) {
+    memberElement.srcObject = null
+  }
+
+  stopPeerAudioMonitor(peerId)
+
   const channel = dataChannels[peerId]
   if (channel) {
     try {
@@ -4507,6 +4658,7 @@ function cleanupPeerConnection(peerId) {
 
   delete remoteStreams[peerId]
   delete remoteVideoElements[peerId]
+  delete memberVideoElements[peerId]
   delete peerStreamCatalog[peerId]
   delete localTrackSenders[peerId]
   delete sharedTrackSenders[peerId]
@@ -4525,6 +4677,7 @@ function stopLocalStream() {
   localMediaStream.value.getTracks().forEach((track) => track.stop())
   localMediaStream.value = null
   updateLocalMediaFlags()
+  stopPeerAudioMonitor(selfId.value)
 }
 
 function cleanupSession() {
@@ -8713,15 +8866,9 @@ onUnmounted(() => {
 }
 
 .participants-panel {
-  flex: 0 0 auto;
-  max-height: 264px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
-}
-
-.participant-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
 
 .participant-invite-banner {
@@ -8764,64 +8911,164 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 
-.participant-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.member-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
   gap: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 10px 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(167, 185, 210, 0.1);
 }
 
-.participant-item.invite-target {
-  border-color: rgba(96, 165, 250, 0.24);
-  background:
-    radial-gradient(circle at right top, rgba(59, 130, 246, 0.12), transparent 32%),
-    rgba(255, 255, 255, 0.06);
-}
-
-.participant-item.seat-assigned {
-  border-color: rgba(34, 197, 94, 0.2);
-}
-
-.participant-main {
-  min-width: 0;
+.member-card {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 20px;
+  overflow: hidden;
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.85), rgba(30, 41, 59, 0.72));
+  border: 2px solid rgba(167, 185, 210, 0.12);
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  cursor: default;
 }
 
-.participant-copy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.member-card.invite-target {
+  border-color: rgba(96, 165, 250, 0.3);
 }
 
-.participant-copy > span {
-  font-size: 13px;
+.member-card.seat-assigned {
+  border-color: rgba(34, 197, 94, 0.25);
 }
 
-.participant-tags,
-.participant-actions {
+.member-card.speaking {
+  border-color: rgba(34, 197, 94, 0.6);
+  animation: member-speaking-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes member-speaking-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(34, 197, 94, 0.2), inset 0 0 8px rgba(34, 197, 94, 0.08); }
+  50% { box-shadow: 0 0 24px rgba(34, 197, 94, 0.4), inset 0 0 14px rgba(34, 197, 94, 0.15); }
+}
+
+.member-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.member-mic-indicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  z-index: 2;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.member-mic-indicator.mic-active {
+  background: rgba(34, 197, 94, 0.35);
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+  animation: mic-breathe 1s ease-in-out infinite;
+}
+
+@keyframes mic-breathe {
+  0%, 100% { box-shadow: 0 0 8px rgba(34, 197, 94, 0.4); }
+  50% { box-shadow: 0 0 18px rgba(34, 197, 94, 0.7); }
+}
+
+.member-mic-icon {
+  width: 14px;
+  height: 14px;
+  stroke: #4ade80;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.member-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px;
+  z-index: 2;
 }
 
-.participant-tag {
-  font-size: 11px;
-  color: #dbeafe;
+.member-badge-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-weight: 600;
+  line-height: 1.3;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
 }
 
-.controller-tag {
+.member-badge-tag.super {
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.member-badge-tag.admin {
+  color: #93c5fd;
+  border: 1px solid rgba(147, 197, 253, 0.3);
+}
+
+.member-badge-tag.ctrl {
   color: #a7f3d0;
+  border: 1px solid rgba(167, 243, 208, 0.3);
 }
 
-.seat-tag {
+.member-badge-tag.seat {
   color: #bbf7d0;
+  border: 1px solid rgba(187, 247, 208, 0.3);
+}
+
+.member-name {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20px 8px 8px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+  text-align: center;
+  z-index: 2;
+}
+
+.member-name span {
+  font-size: 12px;
+  font-weight: 500;
+  color: #f1f5f9;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.member-actions-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(3px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 10;
+}
+
+.member-card:hover .member-actions-overlay {
+  opacity: 1;
 }
 
 .tiny-btn {
@@ -9138,6 +9385,10 @@ onUnmounted(() => {
 
   .participants-panel {
     max-height: none;
+  }
+
+  .member-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   }
 
   .game-card,
