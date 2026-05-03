@@ -926,12 +926,11 @@
               :key="peer.id"
             >
               <video
-                v-if="hasPeerVideo(peer.id)"
                 :ref="(el) => bindMemberVideo(peer.id, el)"
                 class="member-video"
                 autoplay playsinline
               ></video>
-              <UserAvatar v-else :avatar-id="peer.avatarId" :name="peer.name" :size="64" />
+              <UserAvatar v-if="!hasPeerVideo(peer.id)" :avatar-id="peer.avatarId" :name="peer.name" :size="64" />
               <div v-if="hasPeerAudio(peer.id)" class="member-mic-indicator" :class="{ 'mic-active': peerAudioLevels[peer.id] > 0.05 }">
                 <svg class="member-mic-icon" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 14a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v4a3 3 0 0 0 3 3Z" />
