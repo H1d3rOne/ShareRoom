@@ -1025,7 +1025,7 @@
               <button
                 type="button"
                 class="device-toggle"
-                :class="{ active: isAudioOn, off: !isAudioOn }"
+                :class="{ active: isAudioOn, off: !isAudioOn, 'device-mic': true }"
                 :aria-pressed="isAudioOn"
                 :aria-label="isAudioOn ? '关闭麦克风' : '开启麦克风'"
                 :title="isAudioOn ? '关闭麦克风' : '开启麦克风'"
@@ -1041,7 +1041,7 @@
               <button
                 type="button"
                 class="device-toggle"
-                :class="{ active: isSpeakerOn, off: !isSpeakerOn }"
+                :class="{ active: isSpeakerOn, off: !isSpeakerOn, 'device-speaker': true }"
                 :aria-pressed="isSpeakerOn"
                 :aria-label="isSpeakerOn ? '关闭听筒' : '开启听筒'"
                 :title="isSpeakerOn ? '关闭听筒' : '开启听筒'"
@@ -1057,7 +1057,7 @@
               <button
                 type="button"
                 class="device-toggle"
-                :class="{ active: isVideoOn, off: !isVideoOn }"
+                :class="{ active: isVideoOn, off: !isVideoOn, 'device-cam': true }"
                 :aria-pressed="isVideoOn"
                 :aria-label="isVideoOn ? '关闭摄像头' : '开启摄像头'"
                 :title="isVideoOn ? '关闭摄像头' : '开启摄像头'"
@@ -8967,6 +8967,57 @@ onUnmounted(() => {
   border-color: rgba(96, 165, 250, 0.55);
   color: #f8fafc;
   box-shadow: 0 12px 28px rgba(37, 99, 235, 0.22);
+}
+
+.device-mic.active {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.38), rgba(16, 185, 129, 0.5));
+  border-color: rgba(52, 211, 153, 0.55);
+  color: #d1fae5;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.3), 0 0 24px rgba(34, 197, 94, 0.15);
+  animation: device-pulse-green 2s ease-in-out infinite;
+}
+
+.device-speaker.active {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.35), rgba(245, 158, 11, 0.45));
+  border-color: rgba(253, 224, 71, 0.5);
+  color: #fef9c3;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.3), 0 0 24px rgba(251, 191, 36, 0.12);
+  animation: device-pulse-amber 2s ease-in-out infinite;
+}
+
+.device-cam.active {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.38), rgba(99, 102, 241, 0.48));
+  border-color: rgba(129, 140, 248, 0.55);
+  color: #e0e7ff;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.35), 0 0 24px rgba(99, 102, 241, 0.15);
+  animation: device-pulse-blue 2s ease-in-out infinite;
+}
+
+@keyframes device-pulse-green {
+  0%, 100% { box-shadow: 0 0 12px rgba(34, 197, 94, 0.3), 0 0 24px rgba(34, 197, 94, 0.15); }
+  50% { box-shadow: 0 0 18px rgba(34, 197, 94, 0.5), 0 0 36px rgba(34, 197, 94, 0.25); }
+}
+
+@keyframes device-pulse-amber {
+  0%, 100% { box-shadow: 0 0 12px rgba(251, 191, 36, 0.3), 0 0 24px rgba(251, 191, 36, 0.12); }
+  50% { box-shadow: 0 0 18px rgba(251, 191, 36, 0.5), 0 0 36px rgba(251, 191, 36, 0.22); }
+}
+
+@keyframes device-pulse-blue {
+  0%, 100% { box-shadow: 0 0 12px rgba(99, 102, 241, 0.35), 0 0 24px rgba(99, 102, 241, 0.15); }
+  50% { box-shadow: 0 0 18px rgba(99, 102, 241, 0.55), 0 0 36px rgba(99, 102, 241, 0.25); }
+}
+
+.device-mic.active .device-toggle-icon {
+  filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.6));
+}
+
+.device-speaker.active .device-toggle-icon {
+  filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.6));
+}
+
+.device-cam.active .device-toggle-icon {
+  filter: drop-shadow(0 0 4px rgba(99, 102, 241, 0.6));
 }
 
 .device-toggle.off::after {
