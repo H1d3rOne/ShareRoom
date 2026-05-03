@@ -2221,16 +2221,18 @@ function syncSharedVideoUiFromState(sync = activeShare.value?.sync) {
     return
   }
 
+  // 非管理员本地暂停时，冻结 UI 不更新，保持暂停瞬间的画面和进度
+  if (!canGlobalControlShare.value && sharedVideoLocalPaused.value) {
+    sharedVideoUi.playing = false
+    return
+  }
+
   const nextCurrentTime = shouldUseSyncedVideoUi()
     ? getVideoSyncTime(sync)
     : Number(sync.currentTime || 0)
-  sharedVideoUi.currentTime = !canGlobalControlShare.value && sharedVideoLocalPaused.value
-    ? Number(sharedVideoRef.value?.currentTime || sharedVideoUi.currentTime || 0)
-    : nextCurrentTime
+  sharedVideoUi.currentTime = nextCurrentTime
   sharedVideoUi.duration = getResolvedSharedVideoDuration(sync)
-  sharedVideoUi.playing = !canGlobalControlShare.value && sharedVideoLocalPaused.value
-    ? false
-    : Boolean(sync.playing)
+  sharedVideoUi.playing = Boolean(sync.playing)
   sharedVideoUi.muted = sharedVideoMuted.value
   if (sharedVideoRef.value) {
     sharedVideoRef.value.muted = sharedVideoMuted.value
@@ -5693,6 +5695,12 @@ function handleSharedVideoLoaded() {
   ) {
     initializeOwnedSharedVideoStream()
   }
+
+  // 非管理员本地暂停时不更新 UI 和不同步，保持暂停瞬间的状态
+  if (!canGlobalControlShare.value && sharedVideoLocalPaused.value) {
+    return
+  }
+
   if (sharedVideoRef.value && !shouldUseSyncedVideoUi()) {
     sharedVideoUi.duration = getResolvedSharedVideoDuration(activeShare.value?.sync)
     sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
@@ -5714,6 +5722,12 @@ function handleSharedVideoCanPlay() {
   ) {
     initializeOwnedSharedVideoStream()
   }
+
+  // 非管理员本地暂停时不更新 UI 和不同步，保持暂停瞬间的状态
+  if (!canGlobalControlShare.value && sharedVideoLocalPaused.value) {
+    return
+  }
+
   if (sharedVideoRef.value && !shouldUseSyncedVideoUi()) {
     sharedVideoUi.duration = getResolvedSharedVideoDuration(activeShare.value?.sync)
     sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
@@ -5727,6 +5741,13 @@ function handleSharedVideoCanPlay() {
 
 function handleSharedVideoPlaying() {
   markIncomingStreamHealthy()
+
+  // 非管理员本地暂停时，浏览器 autoplay 可能触发 playing 事件，需重新暂停
+  if (!canGlobalControlShare.value && sharedVideoLocalPaused.value && sharedVideoRef.value) {
+    sharedVideoRef.value.pause()
+    return
+  }
+
   if (
     activeShare.value?.kind === 'video'
     && activeShare.value.ownerId === selfId.value
@@ -5777,6 +5798,11 @@ function handleSharedVideoSeek() {
 function handleSharedVideoTimeUpdate() {
   if (isStreamShare(activeShare.value) && activeShare.value?.ownerId !== selfId.value) {
     markIncomingStreamHealthy()
+  }
+
+  // 非管理员本地暂停时不更新 UI，保持暂停瞬间的状态
+  if (!canGlobalControlShare.value && sharedVideoLocalPaused.value) {
+    return
   }
 
   if (sharedVideoRef.value && !shouldUseSyncedVideoUi()) {
