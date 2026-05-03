@@ -909,7 +909,7 @@
           </div>
 
           <div class="video-tile" v-for="peer in participantsWithVideo" :key="peer.id">
-            <video :ref="(element) => bindRemoteVideo(peer.id, element)" autoplay playsinline></video>
+            <video :ref="(element) => bindRemoteVideo(peer.id, element)" autoplay playsinline muted></video>
             <div class="video-tile-label">
               <UserAvatar :avatar-id="peer.avatarId" :name="peer.name" :size="30" />
               <span>{{ peer.name }}</span>
@@ -3156,12 +3156,17 @@ function syncRemoteVideo(peerId) {
     stream = null
   }
 
-  if (element.srcObject !== stream) {
+  const streamChanged = element.srcObject !== stream
+  if (streamChanged) {
     element.srcObject = stream || null
   }
 
   element.muted = !isSpeakerOn.value
   element.volume = isSpeakerOn.value ? 1 : 0
+
+  if (stream && (streamChanged || element.paused)) {
+    element.play().catch(() => {})
+  }
 }
 
 function hasLiveVideoTrack(stream) {
@@ -3299,6 +3304,9 @@ function refreshPeerDisplayStream(peerId) {
 function syncLocalVideo() {
   if (localVideoRef.value) {
     localVideoRef.value.srcObject = localMediaStream.value || null
+    if (localMediaStream.value) {
+      localVideoRef.value.play().catch(() => {})
+    }
   }
 }
 
