@@ -899,23 +899,6 @@
         </div>
         </div>
 
-        <div class="video-grid" v-if="hasVisibleVideoTiles">
-          <div class="video-tile" v-if="hasLocalVideo">
-            <video ref="localVideoRef" autoplay playsinline muted></video>
-            <div class="video-tile-label">
-              <UserAvatar :avatar-id="selfAvatarId" :name="displayName" :size="30" />
-              <span>我</span>
-            </div>
-          </div>
-
-          <div class="video-tile" v-for="peer in participantsWithVideo" :key="peer.id">
-            <video :ref="(element) => bindRemoteVideo(peer.id, element)" autoplay playsinline muted></video>
-            <div class="video-tile-label">
-              <UserAvatar :avatar-id="peer.avatarId" :name="peer.name" :size="30" />
-              <span>{{ peer.name }}</span>
-            </div>
-          </div>
-        </div>
       </section>
 
       <aside class="sidebar">
@@ -8954,7 +8937,7 @@ onUnmounted(() => {
 
 .member-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
 }
 
@@ -9487,7 +9470,7 @@ onUnmounted(() => {
   }
 
   .member-grid {
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .game-card,
