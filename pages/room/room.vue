@@ -929,7 +929,7 @@
                 v-if="hasPeerVideo(peer.id)"
                 :ref="(el) => bindMemberVideo(peer.id, el)"
                 class="member-video"
-                autoplay playsinline muted
+                autoplay playsinline
               ></video>
               <UserAvatar v-else :avatar-id="peer.avatarId" :name="peer.name" :size="64" />
               <div v-if="hasPeerAudio(peer.id)" class="member-mic-indicator" :class="{ 'mic-active': peerAudioLevels[peer.id] > 0.05 }">
@@ -3360,6 +3360,12 @@ function syncMemberVideo(peerId) {
   if (element.srcObject !== stream) {
     element.srcObject = stream || null
   }
+  if (peerId === selfId.value) {
+    element.muted = true
+  } else {
+    element.muted = !isSpeakerOn.value
+    element.volume = isSpeakerOn.value ? 1 : 0
+  }
   if (stream && element.paused) {
     element.play().catch(() => {})
   }
@@ -3475,6 +3481,9 @@ function syncLocalVideo() {
 function syncRemoteAudioPlayback() {
   Object.keys(remoteVideoElements).forEach((peerId) => {
     syncRemoteVideo(peerId)
+  })
+  Object.keys(memberVideoElements).forEach((peerId) => {
+    syncMemberVideo(peerId)
   })
 }
 
@@ -8951,7 +8960,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
   cursor: default;
 }
 
@@ -8964,13 +8973,15 @@ onUnmounted(() => {
 }
 
 .member-card.speaking {
-  border-color: rgba(34, 197, 94, 0.6);
-  animation: member-speaking-pulse 1.2s ease-in-out infinite;
+  border-color: #22c55e;
+  border-width: 3px;
+  transform: scale(1.02);
+  animation: member-speaking-pulse 0.8s ease-in-out infinite;
 }
 
 @keyframes member-speaking-pulse {
-  0%, 100% { box-shadow: 0 0 12px rgba(34, 197, 94, 0.2), inset 0 0 8px rgba(34, 197, 94, 0.08); }
-  50% { box-shadow: 0 0 24px rgba(34, 197, 94, 0.4), inset 0 0 14px rgba(34, 197, 94, 0.15); }
+  0%, 100% { box-shadow: 0 0 8px rgba(34, 197, 94, 0.5), 0 0 20px rgba(34, 197, 94, 0.25), inset 0 0 8px rgba(34, 197, 94, 0.1); }
+  50% { box-shadow: 0 0 14px rgba(34, 197, 94, 0.7), 0 0 32px rgba(34, 197, 94, 0.4), inset 0 0 14px rgba(34, 197, 94, 0.2); }
 }
 
 .member-video {
@@ -8983,23 +8994,25 @@ onUnmounted(() => {
 
 .member-mic-indicator {
   position: absolute;
-  bottom: 36px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.85);
+  border: 2px solid rgba(148, 163, 184, 0.3);
   display: grid;
   place-items: center;
-  z-index: 2;
-  transition: background 0.3s ease, box-shadow 0.3s ease;
+  z-index: 3;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .member-mic-indicator.mic-active {
-  background: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.3);
+  border-color: #22c55e;
   box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
-  animation: mic-breathe 1s ease-in-out infinite;
+  animation: mic-breathe 0.8s ease-in-out infinite;
 }
 
 @keyframes mic-breathe {
