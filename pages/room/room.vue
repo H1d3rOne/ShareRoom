@@ -962,47 +962,63 @@
                 <span v-if="peer.isController" class="member-badge-tag ctrl">远控</span>
                 <span v-if="getParticipantSeatLabel(peer.id)" class="member-badge-tag seat">{{ getParticipantSeatLabel(peer.id) }}</span>
               </div>
-              <div class="member-name">
-                <span>{{ peer.name }}</span>
-              </div>
-              <div class="member-actions-overlay">
+              <button
+                v-if="hasMemberActions(peer)"
+                type="button"
+                class="member-menu-btn"
+                @click.stop="toggleMemberMenu(peer.id)"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="5" r="1.5" />
+                  <circle cx="12" cy="12" r="1.5" />
+                  <circle cx="12" cy="19" r="1.5" />
+                </svg>
+              </button>
+              <div v-if="openMemberMenuId === peer.id" class="member-dropdown" @click.stop>
                 <button
                   v-if="canInvitePeerFromList(peer)"
                   type="button"
-                  class="tiny-btn active"
-                  @click="selectPeerForInvite(peer)"
+                  class="member-dropdown-item"
+                  @click="selectPeerForInvite(peer); openMemberMenuId = ''"
                 >
                   {{ getInvitePeerActionLabel() }}
                 </button>
                 <button
                   v-if="canGrantAdmin && !peer.isSuperAdmin && !peer.isAdmin && peer.id !== selfId"
-                  class="tiny-btn admin-transfer-btn"
-                  @click="grantAdminTo(peer)"
+                  type="button"
+                  class="member-dropdown-item"
+                  @click="grantAdminTo(peer); openMemberMenuId = ''"
                 >
                   授予管理员
                 </button>
                 <button
                   v-else-if="canGrantAdmin && !peer.isSuperAdmin && peer.isAdmin && peer.id !== selfId"
-                  class="tiny-btn admin-transfer-btn danger"
-                  @click="revokeAdminFrom(peer)"
+                  type="button"
+                  class="member-dropdown-item danger"
+                  @click="revokeAdminFrom(peer); openMemberMenuId = ''"
                 >
                   撤销管理员
                 </button>
                 <button
                   v-if="canManagePeerRemoteControl(peer)"
-                  class="tiny-btn"
+                  type="button"
+                  class="member-dropdown-item"
                   :class="{ danger: peer.isController }"
-                  @click="togglePeerRemoteControl(peer)"
+                  @click="togglePeerRemoteControl(peer); openMemberMenuId = ''"
                 >
                   {{ peer.isController ? '撤销远控' : '授权远控' }}
                 </button>
                 <button
                   v-else-if="canRequestPeerRemoteControl(peer)"
-                  class="tiny-btn"
-                  @click="requestRemoteControl(peer.id)"
+                  type="button"
+                  class="member-dropdown-item"
+                  @click="requestRemoteControl(peer.id); openMemberMenuId = ''"
                 >
                   申请远控
                 </button>
+              </div>
+              <div class="member-name">
+                <span>{{ peer.name }}</span>
               </div>
             </div>
           </div>
@@ -1204,6 +1220,7 @@ const remoteStreams = reactive({})
 const remoteVideoElements = reactive({})
 const peerStreamCatalog = reactive({})
 const memberVideoElements = reactive({})
+const openMemberMenuId = ref('')
 const peerAudioLevels = reactive({})
 const peerAudioContexts = {}
 const peerAudioAnalysers = {}
@@ -3328,6 +3345,22 @@ function hasPeerVideo(peerId) {
   return hasLiveVideoTrack(stream)
 }
 
+function hasMemberActions(peer) {
+  if (canInvitePeerFromList(peer)) return true
+  if (canGrantAdmin && !peer.isSuperAdmin && peer.id !== selfId.value) return true
+  if (canManagePeerRemoteControl(peer)) return true
+  if (canRequestPeerRemoteControl(peer)) return true
+  return false
+}
+
+function toggleMemberMenu(peerId) {
+  openMemberMenuId.value = openMemberMenuId.value === peerId ? '' : peerId
+}
+
+function closeMemberMenu() {
+  openMemberMenuId.value = ''
+}
+
 function bindMemberVideo(peerId, element) {
   if (!element) {
     delete memberVideoElements[peerId]
@@ -3363,6 +3396,7 @@ function startPeerAudioMonitor(peerId, stream) {
   if (peerAudioContexts[peerId]) return
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    if (ctx.state === 'suspended') ctx.resume()
     const source = ctx.createMediaStreamSource(stream)
     const analyser = ctx.createAnalyser()
     analyser.fftSize = 256
@@ -3424,11 +3458,16 @@ function startLocalAudioMonitor(peerId, stream) {
   if (peerAudioContexts[peerId]) return
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    if (ctx.state === 'suspended') ctx.resume()
     const source = ctx.createMediaStreamSource(stream)
     const analyser = ctx.createAnalyser()
     analyser.fftSize = 256
+    // 通过静音增益节点连接到 destination，确保 analyser 能获取数据
+    const silentGain = ctx.createGain()
+    silentGain.gain.value = 0
     source.connect(analyser)
-    // 不连接 destination，避免本地回声
+    analyser.connect(silentGain)
+    silentGain.connect(ctx.destination)
     peerAudioContexts[peerId] = ctx
     peerAudioAnalysers[peerId] = analyser
     peerAudioLevels[peerId] = 0
@@ -6271,9 +6310,11 @@ watch(
 
 onMounted(() => {
   connectSocket()
+  document.addEventListener('click', closeMemberMenu)
 })
 
 onUnmounted(() => {
+  document.removeEventListener('click', closeMemberMenu)
   if (sharedVideoUiTicker) {
     clearInterval(sharedVideoUiTicker)
     sharedVideoUiTicker = null
@@ -8959,7 +9000,7 @@ onUnmounted(() => {
 
 .member-mic-indicator {
   position: absolute;
-  top: 8px;
+  bottom: 36px;
   right: 8px;
   width: 28px;
   height: 28px;
@@ -9051,24 +9092,82 @@ onUnmounted(() => {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
-.member-actions-overlay {
+.member-menu-btn {
   position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(3px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 5;
   opacity: 0;
-  transition: opacity 0.2s ease;
-  z-index: 10;
+  transition: opacity 0.2s ease, background 0.2s ease;
 }
 
-.member-card:hover .member-actions-overlay {
+.member-card:hover .member-menu-btn {
   opacity: 1;
+}
+
+.member-menu-btn:hover {
+  background: rgba(59, 130, 246, 0.5);
+}
+
+.member-menu-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: #e2e8f0;
+}
+
+.member-dropdown {
+  position: absolute;
+  top: 36px;
+  right: 6px;
+  min-width: 120px;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(167, 185, 210, 0.2);
+  border-radius: 14px;
+  padding: 6px;
+  z-index: 20;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+  animation: member-dropdown-in 0.15s ease-out;
+}
+
+@keyframes member-dropdown-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.member-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.member-dropdown-item:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.member-dropdown-item.danger {
+  color: #fca5a5;
+}
+
+.member-dropdown-item.danger:hover {
+  background: rgba(239, 68, 68, 0.2);
 }
 
 .tiny-btn {
