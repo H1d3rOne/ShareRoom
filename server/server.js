@@ -1892,19 +1892,23 @@ io.on('connection', (socket) => {
       ? 'image'
       : payload.media.kind === 'screen'
         ? 'screen'
-        : 'video'
+        : payload.media.kind === 'livestream'
+          ? 'livestream'
+          : 'video'
     const sharedMedia = {
       id: payload.media.id,
       kind,
       fileName: payload.media.fileName || '未命名文件',
       fileType: payload.media.fileType || '',
       fileSize: Number(payload.media.fileSize) || 0,
-      deliveryMode: payload.media.deliveryMode || (kind === 'video' ? 'stream' : 'file'),
+      deliveryMode: payload.media.deliveryMode || (kind === 'video' ? 'stream' : kind === 'livestream' ? 'livestream' : 'file'),
       streamId: payload.media.streamId || null,
       sourceType: payload.media.sourceType || '',
       livekitRoomName: payload.media.livekitRoomName || '',
       livekitTrackSid: payload.media.livekitTrackSid || '',
       shareLabel: payload.media.shareLabel || '',
+      url: payload.media.url || '',
+      livestreamProtocol: payload.media.livestreamProtocol || '',
       duration: Number(payload.media.duration) || 0,
       ownerId: socket.id,
       ownerName: session.userName,

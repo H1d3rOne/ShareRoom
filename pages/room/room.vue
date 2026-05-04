@@ -676,6 +676,25 @@
                 @timeupdate="handleSharedVideoTimeUpdate"
               ></video>
 
+              <div v-else-if="activeShare.kind === 'livestream'" class="livestream-container">
+                <video
+                  ref="livestreamVideoRef"
+                  class="shared-video livestream-video"
+                  style="display:block;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain;"
+                  autoplay
+                  playsinline
+                  muted
+                ></video>
+                <div v-if="!livestreamReady" class="webpage-loading">
+                  <div class="loader"></div>
+                  <p>正在连接直播流…</p>
+                </div>
+                <div v-if="livestreamError" class="livestream-error">
+                  <p>{{ livestreamError }}</p>
+                  <button class="ghost-btn" @click.stop="retryLivestream">重试</button>
+                </div>
+              </div>
+
               <div v-else-if="activeShare.kind === 'webpage'" ref="webpageShareContainerRef" class="webpage-share-container">
                 <div class="webpage-toolbar">
                   <button
@@ -882,6 +901,7 @@
             <button v-if="canShare" class="primary-btn" @click="chooseMedia">文件共享</button>
             <button v-if="canShare" class="secondary-btn" @click="startScreenShare">屏幕共享</button>
             <button v-if="canShare" class="secondary-btn" @click="openWebpageShareDialog">网页共享</button>
+            <button v-if="canShare" class="secondary-btn" @click="openLivestreamDialog">直播共享</button>
             <button v-if="canOpenGameMenu" class="secondary-btn" :class="{ active: showGameMenu || activeGame || gameInvite }" @click="toggleGameMenu">
               {{ gameMenuButtonLabel }}
             </button>
@@ -1116,6 +1136,42 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showLivestreamDialog" class="modal-overlay" @click.self="closeLivestreamDialog">
+      <div class="modal-content webpage-dialog">
+        <div class="modal-header">
+          <h3 class="modal-title">直播共享</h3>
+          <button class="modal-close" @click="closeLivestreamDialog">&times;</button>
+        </div>
+        <div class="modal-body">
+          <label class="input-label" for="livestream-platform-select">选择直播平台</label>
+          <select
+            id="livestream-platform-select"
+            v-model="livestreamPlatform"
+            class="text-input"
+          >
+            <option value="auto">自动识别</option>
+            <option value="hls">HLS 流</option>
+            <option value="flv">FLV 流</option>
+          </select>
+          <label class="input-label" for="livestream-url-input" style="margin-top:12px;">输入直播流地址</label>
+          <input
+            id="livestream-url-input"
+            ref="livestreamUrlInputRef"
+            v-model="livestreamUrlInput"
+            type="url"
+            class="text-input"
+            placeholder="https://example.com/live/stream.m3u8"
+            @keyup.enter="confirmLivestreamShare"
+          />
+          <p class="input-hint">支持 HLS (.m3u8) 和 FLV 直播流地址，房间成员将同步观看。</p>
+        </div>
+        <div class="modal-footer">
+          <button class="secondary-btn" @click="closeLivestreamDialog">取消</button>
+          <button class="primary-btn" :disabled="!isValidLivestreamUrl" @click="confirmLivestreamShare">开始共享</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1124,6 +1180,8 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { useRoute, useRouter } from 'vue-router'
 import { io } from 'socket.io-client'
 import UserAvatar from '../../components/UserAvatar.vue'
+import Hls from 'hls.js'
+import flvjs from 'flv.js'
 import { createLivekitShareSession } from '../../utils/livekitSession.js'
 import { DEFAULT_AVATAR_ID, ensureStoredUserProfile, resolveAvatarId } from '../../utils/userProfile'
 
@@ -1168,6 +1226,15 @@ const sharedVideoMuted = ref(true)
 const sharedVideoPlayFailed = ref(false)
 const sharedVideoLocalPaused = ref(false)
 const lastVideoHeartbeatAt = ref(0)
+const showLivestreamDialog = ref(false)
+const livestreamUrlInput = ref('')
+const livestreamPlatform = ref('auto')
+const livestreamUrlInputRef = ref(null)
+let hlsInstance = null
+let flvPlayerInstance = null
+const livestreamVideoRef = ref(null)
+const livestreamReady = ref(false)
+const livestreamError = ref('')
 const lastRemotePointerSentAt = ref(0)
 const sharedOutgoingStream = ref(null)
 const sharedIncomingStream = ref(null)
@@ -1307,6 +1374,20 @@ const isValidWebpageUrl = computed(() => {
   try {
     new URL(url)
     return url.startsWith('http://') || url.startsWith('https://')
+  } catch {
+    return false
+  }
+})
+const isValidLivestreamUrl = computed(() => {
+  const url = livestreamUrlInput.value.trim()
+  if (!url) return false
+  try {
+    new URL(url)
+    if (!(url.startsWith('http://') || url.startsWith('https://'))) return false
+    const lower = url.toLowerCase()
+    if (livestreamPlatform.value === 'hls') return lower.includes('.m3u8') || lower.includes('hls')
+    if (livestreamPlatform.value === 'flv') return lower.includes('.flv') || lower.includes('flv')
+    return lower.includes('.m3u8') || lower.includes('.flv') || lower.includes('hls') || lower.includes('flv')
   } catch {
     return false
   }
@@ -1992,6 +2073,7 @@ function getShareKindLabel(kind) {
   if (kind === 'image') return '图片'
   if (kind === 'screen') return '屏幕'
   if (kind === 'webpage') return '网页'
+  if (kind === 'livestream') return '直播'
   return '视频'
 }
 
@@ -3109,6 +3191,7 @@ function openIncomingShare(media) {
     zoomed: Boolean(media.zoomed),
     deliveryMode: media.deliveryMode || 'file',
     streamId: media.streamId || null,
+    livestreamProtocol: media.livestreamProtocol || '',
     pointer: media.pointer || null,
     sync: media.sync || (media.kind === 'video'
       ? {
@@ -3135,6 +3218,12 @@ function openIncomingShare(media) {
   if (media.kind === 'video') {
     sharedVideoMuted.value = Boolean(media.sync?.muted ?? true)
     sharedVideoUi.muted = sharedVideoMuted.value
+  }
+
+  if (media.kind === 'livestream' && media.ownerId !== selfId.value && media.url) {
+    nextTick(() => {
+      initLivestreamPlayer(media.url)
+    })
   }
 }
 
@@ -5369,6 +5458,177 @@ function handleWebpageError(entry, index) {
   pushSystemMessage('网页加载失败，该网站可能禁止在iframe中嵌入')
 }
 
+function openLivestreamDialog() {
+  if (!isConnected.value) {
+    alert('连接尚未建立，请稍后再试')
+    return
+  }
+  if (!canShare.value) {
+    alert('仅管理员可以共享直播')
+    return
+  }
+  livestreamUrlInput.value = ''
+  livestreamPlatform.value = 'auto'
+  livestreamError.value = ''
+  showLivestreamDialog.value = true
+  nextTick(() => {
+    livestreamUrlInputRef.value?.focus()
+  })
+}
+
+function closeLivestreamDialog() {
+  showLivestreamDialog.value = false
+  livestreamUrlInput.value = ''
+  livestreamPlatform.value = 'auto'
+}
+
+function destroyLivestreamPlayer() {
+  if (hlsInstance) {
+    try { hlsInstance.destroy() } catch {}
+    hlsInstance = null
+  }
+  if (flvPlayerInstance) {
+    try { flvPlayerInstance.destroy() } catch {}
+    flvPlayerInstance = null
+  }
+  livestreamReady.value = false
+  livestreamError.value = ''
+}
+
+function detectStreamProtocol(url) {
+  const lower = url.toLowerCase()
+  if (lower.includes('.m3u8') || lower.includes('hls')) return 'hls'
+  if (lower.includes('.flv') || lower.includes('flv')) return 'flv'
+  if (lower.includes('.ts') && !lower.includes('.tsx')) return 'hls'
+  return null
+}
+
+function initLivestreamPlayer(url) {
+  destroyLivestreamPlayer()
+  livestreamReady.value = false
+  livestreamError.value = ''
+
+  const protocol = livestreamPlatform.value === 'auto'
+    ? detectStreamProtocol(url)
+    : livestreamPlatform.value
+
+  nextTick(() => {
+    const video = livestreamVideoRef.value
+    if (!video) return
+
+    if (protocol === 'hls' || (!protocol && url.includes('.m3u8'))) {
+      if (Hls.isSupported()) {
+        hlsInstance = new Hls({ liveDurationInfinity: true, maxBufferLength: 10 })
+        hlsInstance.loadSource(url)
+        hlsInstance.attachMedia(video)
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+          livestreamReady.value = true
+          video.play().catch(() => {})
+        })
+        hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) {
+            livestreamError.value = 'HLS 流加载失败: ' + (data.details || '未知错误')
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+              hlsInstance.startLoad()
+            } else {
+              hlsInstance.destroy()
+              hlsInstance = null
+            }
+          }
+        })
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = url
+        video.addEventListener('loadedmetadata', () => {
+          livestreamReady.value = true
+          video.play().catch(() => {})
+        }, { once: true })
+      } else {
+        livestreamError.value = '当前浏览器不支持 HLS 播放'
+      }
+    } else if (protocol === 'flv' || (!protocol && url.includes('.flv'))) {
+      if (flvjs.isSupported()) {
+        flvPlayerInstance = flvjs.createPlayer({
+          type: 'flv',
+          url,
+          isLive: true
+        })
+        flvPlayerInstance.attachMediaElement(video)
+        flvPlayerInstance.load()
+        flvPlayerInstance.play()
+        flvPlayerInstance.on(flvjs.Events.MEDIA_INFO, () => {
+          livestreamReady.value = true
+        })
+        flvPlayerInstance.on(flvjs.Events.ERROR, (errType, errDetail) => {
+          livestreamError.value = 'FLV 流加载失败: ' + errDetail
+        })
+      } else {
+        livestreamError.value = '当前浏览器不支持 FLV 播放'
+      }
+    } else {
+      livestreamError.value = '无法识别流协议，请选择 HLS 或 FLV'
+    }
+  })
+}
+
+function confirmLivestreamShare() {
+  const url = livestreamUrlInput.value.trim()
+  if (!isValidLivestreamUrl.value) {
+    alert('请输入有效的直播流地址')
+    return
+  }
+
+  const platformLabel = livestreamPlatform.value === 'hls' ? 'HLS'
+    : livestreamPlatform.value === 'flv' ? 'FLV' : '直播'
+  const fileName = 
+
+  closeSharedMedia()
+
+  const shareId = 
+  updateActiveShare({
+    id: shareId,
+    kind: 'livestream',
+    fileName,
+    fileType: 'livestream',
+    fileSize: 0,
+    ownerId: selfId.value,
+    ownerName: displayName.value,
+    url,
+    progress: 100,
+    deliveryMode: 'livestream',
+    livestreamProtocol: livestreamPlatform.value === 'auto' ? detectStreamProtocol(url) || 'hls' : livestreamPlatform.value
+  })
+
+  if (socket.value?.connected) {
+    socket.value.emit('share-start', {
+      roomId: roomId.value,
+      media: {
+        id: shareId,
+        kind: 'livestream',
+        fileName,
+        fileType: 'livestream',
+        fileSize: 0,
+        deliveryMode: 'livestream',
+        livestreamProtocol: livestreamPlatform.value === 'auto' ? detectStreamProtocol(url) || 'hls' : livestreamPlatform.value,
+        url
+      }
+    })
+  }
+
+  closeLivestreamDialog()
+  pushSystemMessage()
+
+  nextTick(() => {
+    initLivestreamPlayer(url)
+  })
+}
+
+function retryLivestream() {
+  const share = activeShare.value
+  if (share?.kind === 'livestream' && share.url) {
+    initLivestreamPlayer(share.url)
+  }
+}
+
 function chooseMedia() {
   if (!isConnected.value) {
     alert('连接尚未建立，请稍后再试')
@@ -6208,6 +6468,10 @@ function closeSharedMedia(fromTrackEnded = false) {
     roomId: roomId.value,
     mediaId: activeShare.value.id
   })
+
+  if (activeShare.value.kind === 'livestream') {
+    destroyLivestreamPlayer()
+  }
 
   clearActiveShare()
   setRemoteControlState('', '')

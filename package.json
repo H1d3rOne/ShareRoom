@@ -20,6 +20,8 @@
   },
   "dependencies": {
     "express": "^5.2.1",
+    "flv.js": "^1.6.2",
+    "hls.js": "^1.6.16",
     "livekit-client": "^2.18.7",
     "livekit-server-sdk": "^2.15.2",
     "socket.io": "^4.8.3",
