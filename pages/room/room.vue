@@ -5622,8 +5622,17 @@ function initLivestreamPlayer(url) {
         hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
           livestreamReady.value = true
           sharedVideoUi.playing = true
-          sharedVideoUi.duration = Number.isFinite(video.duration) ? video.duration : 0
-          video.play().catch(() => {})
+          sharedVideoUi.duration = 0
+          suppressShareEvents(2000)
+          video.play().catch((e) => {
+            console.warn('直播自动播放失败，尝试静音播放:', e?.name)
+            if (e?.name === 'NotAllowedError' && !video.muted) {
+              video.muted = true
+              sharedVideoMuted.value = true
+              sharedVideoUi.muted = true
+              video.play().catch(() => {})
+            }
+          })
         })
         hlsInstance.on(Hls.Events.ERROR, (event, data) => {
           if (data.fatal) {
@@ -5641,8 +5650,17 @@ function initLivestreamPlayer(url) {
         video.addEventListener('loadedmetadata', () => {
           livestreamReady.value = true
           sharedVideoUi.playing = true
-          sharedVideoUi.duration = Number.isFinite(video.duration) ? video.duration : 0
-          video.play().catch(() => {})
+          sharedVideoUi.duration = 0
+          suppressShareEvents(2000)
+          video.play().catch((e) => {
+            console.warn('直播自动播放失败(Safari)，尝试静音播放:', e?.name)
+            if (e?.name === 'NotAllowedError' && !video.muted) {
+              video.muted = true
+              sharedVideoMuted.value = true
+              sharedVideoUi.muted = true
+              video.play().catch(() => {})
+            }
+          })
         }, { once: true })
       } else {
         livestreamError.value = '当前浏览器不支持 HLS 播放'
@@ -5661,7 +5679,11 @@ function initLivestreamPlayer(url) {
         flvPlayerInstance.on(flvjs.Events.MEDIA_INFO, () => {
           livestreamReady.value = true
           sharedVideoUi.playing = true
-          sharedVideoUi.duration = Number.isFinite(video.duration) ? video.duration : 0
+          sharedVideoUi.duration = 0
+          suppressShareEvents(2000)
+          video.play().catch((e) => {
+            console.warn('FLV直播自动播放失败:', e?.name)
+          })
         })
         flvPlayerInstance.on(flvjs.Events.ERROR, (errType, errDetail) => {
           livestreamError.value = 'FLV 流加载失败: ' + errDetail
@@ -6368,13 +6390,10 @@ function applyVideoSync(sync, forceSeek = false) {
 
 function handleSharedVideoLoaded() {
   if (activeShare.value?.kind === 'livestream') {
-    // 直播流：更新播放状态，不同步时间
+    // 直播流：只更新UI状态，不触发同步（避免和 initLivestreamPlayer 的 play() 竞争）
     if (sharedVideoRef.value) {
       sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
       sharedVideoUi.playing = Boolean(!sharedVideoRef.value.paused && !sharedVideoRef.value.ended)
-    }
-    if (activeShare.value.sync && activeShare.value.sync.playing) {
-      applyVideoSync(activeShare.value.sync, false)
     }
     return
   }
@@ -6409,13 +6428,10 @@ function handleSharedVideoLoaded() {
 
 function handleSharedVideoCanPlay() {
   if (activeShare.value?.kind === 'livestream') {
-    // 直播流：更新播放状态，确保开始播放
+    // 直播流：只更新UI状态，不触发播放（避免和 initLivestreamPlayer 竞争）
     if (sharedVideoRef.value) {
       sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
       sharedVideoUi.playing = Boolean(!sharedVideoRef.value.paused && !sharedVideoRef.value.ended)
-    }
-    if (activeShare.value.sync && activeShare.value.sync.playing && sharedVideoRef.value?.paused) {
-      playSharedVideoSafely({ source: '直播canplay自动播放' })
     }
     return
   }
@@ -6512,27 +6528,32 @@ function handleSharedVideoPlay() {
 function handleSharedVideoPause() {
   if (activeShare.value?.kind === 'livestream') {
     // 直播流暂停处理：
-    // 1. 管理员非主动暂停（缓冲等）→ 自动恢复播放，不发暂停信号
-    // 2. 管理员主动暂停 → 发送暂停信号
-    // 3. 非管理员 → 只做本地暂停/恢复，不发信号
+    // 管理员点击暂停按钮时，sharedVideoLocalPaused 会被设为 false（通过 toggleSharedVideoPlayback）
+    // 而 suppressShareEvents 期间是初始化/seek操作触发的暂停，应自动恢复
     if (!canGlobalControlShare.value) {
-      // 非管理员本地暂停，不发同步信号
+      // 非管理员：不自动恢复，保留本地暂停状态
       return
     }
+    // suppressShareEvents 期间 = 初始化/缓冲/seek 导致的暂停，自动恢复
     if (shouldSuppressShareEvents()) {
-      // 主动操作触发的暂停（如管理员点击暂停按钮），不自动恢复
-      sharedVideoUi.playing = false
-      emitShareControl('pause', {
-        playing: false,
-        currentTime: sharedVideoRef.value?.currentTime || 0,
-        duration: 0
-      })
+      if (activeShare.value.sync?.playing !== false) {
+        playSharedVideoSafely({ source: '直播缓冲自动恢复' })
+      }
       return
     }
-    // 非主动暂停（缓冲等），自动恢复播放，不发暂停信号
-    if (!sharedVideoLocalPaused.value && activeShare.value.sync?.playing !== false) {
+    // 非抑制期间 = 可能是用户点击暂停或真正的缓冲
+    // 如果 sync.playing 为 true（全局应该正在播放），自动恢复
+    if (activeShare.value.sync?.playing !== false && !sharedVideoLocalPaused.value) {
       playSharedVideoSafely({ source: '直播缓冲自动恢复' })
+      return
     }
+    // 管理员主动暂停或全局已暂停
+    sharedVideoUi.playing = false
+    emitShareControl('pause', {
+      playing: false,
+      currentTime: sharedVideoRef.value?.currentTime || 0,
+      duration: 0
+    })
     return
   }
   if (shouldSuppressShareEvents() || (activeShare.value?.kind !== 'video' && activeShare.value?.kind !== 'livestream') || !canGlobalControlShare.value) {
