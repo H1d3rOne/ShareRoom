@@ -1212,6 +1212,9 @@ app.post('/api/resolve-livestream', async (req, res) => {
           if (playerUrl) streamUrls.flv = playerUrl[1]
         }
 
+        // 清理URL末尾的反斜杠和引号残留
+        if (streamUrls.hls) streamUrls.hls = streamUrls.hls.replace(/[\\\"]+$/g, '')
+        if (streamUrls.flv) streamUrls.flv = streamUrls.flv.replace(/[\\\"]+$/g, '')
         console.log('抖音解析结果: HLS=', streamUrls.hls ? 'YES' : 'NO', ', FLV=', streamUrls.flv ? 'YES' : 'NO')
       } catch (e) {
         console.error('抖音页面解析失败:', e.message)
