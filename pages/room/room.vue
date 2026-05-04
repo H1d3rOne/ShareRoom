@@ -3200,6 +3200,22 @@ function rememberPeerStream(peerId, stream) {
     peerStreamCatalog[peerId] = {}
   }
   peerStreamCatalog[peerId][stream.id] = stream
+  attachPeerStreamTrackListeners(peerId, stream)
+}
+
+function attachPeerStreamTrackListeners(peerId, stream) {
+  if (!stream || stream.__trackListenersAttached) return
+  stream.__trackListenersAttached = true
+  const refresh = () => {
+    nextTick(() => refreshPeerDisplayStream(peerId))
+  }
+  stream.getTracks().forEach((track) => {
+    track.addEventListener('mute', refresh)
+    track.addEventListener('unmute', refresh)
+    track.addEventListener('ended', refresh)
+  })
+  stream.addEventListener('addtrack', refresh)
+  stream.addEventListener('removetrack', refresh)
 }
 
 function getPeerStreams(peerId) {
@@ -6077,6 +6093,11 @@ function toggleSharedVideoPlayback() {
           sharedVideoRef.value.currentTime = 0
         } catch (error) {
           console.error('重置播放位置失败:', error)
+        }
+        // 清除旧的 captureStream，让 handleSharedVideoPlaying 重新捕获
+        if (sharedOutgoingStream.value) {
+          sharedOutgoingStream.value = null
+          updateActiveShare({ streamId: null })
         }
       }
       suppressShareEvents(500)
