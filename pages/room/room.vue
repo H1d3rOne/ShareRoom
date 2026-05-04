@@ -3357,8 +3357,22 @@ function syncMemberVideo(peerId) {
   const element = memberVideoElements[peerId]
   const stream = peerId === selfId.value ? localMediaStream.value : remoteStreams[peerId]
   if (!element) return
-  if (element.srcObject !== stream) {
-    element.srcObject = stream || null
+
+  let playbackStream = stream
+  if (stream) {
+    const hasVideo = stream.getVideoTracks().some((t) => t.readyState === 'live')
+    const hasAudio = stream.getAudioTracks().some((t) => t.readyState === 'live')
+    if (!hasVideo && hasAudio) {
+      playbackStream = new MediaStream(stream.getAudioTracks())
+    } else if (!hasVideo && !hasAudio) {
+      playbackStream = null
+    }
+  } else {
+    playbackStream = null
+  }
+
+  if (element.srcObject !== playbackStream) {
+    element.srcObject = playbackStream
   }
   if (peerId === selfId.value) {
     element.muted = true
@@ -3366,7 +3380,7 @@ function syncMemberVideo(peerId) {
     element.muted = !isSpeakerOn.value
     element.volume = isSpeakerOn.value ? 1 : 0
   }
-  if (stream && element.paused) {
+  if (playbackStream && element.paused) {
     element.play().catch(() => {})
   }
 }
@@ -3389,7 +3403,11 @@ function startPeerAudioMonitor(peerId, stream) {
     const source = ctx.createMediaStreamSource(stream)
     const analyser = ctx.createAnalyser()
     analyser.fftSize = 256
+    const silentGain = ctx.createGain()
+    silentGain.gain.value = 0
     source.connect(analyser)
+    analyser.connect(silentGain)
+    silentGain.connect(ctx.destination)
     peerAudioContexts[peerId] = ctx
     peerAudioAnalysers[peerId] = analyser
     peerAudioLevels[peerId] = 0
@@ -3450,7 +3468,11 @@ function startLocalAudioMonitor(peerId, stream) {
     const source = ctx.createMediaStreamSource(stream)
     const analyser = ctx.createAnalyser()
     analyser.fftSize = 256
+    const silentGain = ctx.createGain()
+    silentGain.gain.value = 0
     source.connect(analyser)
+    analyser.connect(silentGain)
+    silentGain.connect(ctx.destination)
     peerAudioContexts[peerId] = ctx
     peerAudioAnalysers[peerId] = analyser
     peerAudioLevels[peerId] = 0
