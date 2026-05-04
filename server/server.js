@@ -1146,35 +1146,71 @@ app.post('/api/resolve-livestream', async (req, res) => {
   }
 
   try {
-    let streamUrl = null
+    let streamUrls = { hls: null, flv: null }
     const effectivePlatform = platform === 'auto'
       ? (url.includes('douyin.com') ? 'douyin' : url.includes('bilibili.com') ? 'bilibili' : null)
       : platform
     if (!effectivePlatform) {
       return res.status(400).json({ ok: false, error: '无法自动识别直播平台，请手动选择' })
     }
+
+    const mobileUA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
+
     if (effectivePlatform === 'douyin') {
-      const match = url.match(/live\.douyin\.com\/(\d+)/)
-      if (!match) {
+      // 从URL中提取room_id（19位数字）
+      let roomId = null
+      const roomMatch = url.match(/(\d{19})/)
+      if (roomMatch) {
+        roomId = roomMatch[1]
+      } else {
+        // 尝试从 live.douyin.com/xxx 提取
+        const liveMatch = url.match(/live\.douyin\.com\/(\d+)/)
+        if (liveMatch) {
+          roomId = liveMatch[1]
+        } else {
+          // 尝试通过短链接重定向获取
+          try {
+            const headResp = await fetch(url, {
+              method: 'HEAD',
+              headers: { 'User-Agent': mobileUA },
+              redirect: 'follow'
+            })
+            const finalUrl = headResp.url || url
+            const ridMatch = finalUrl.match(/(\d{19})/)
+            if (ridMatch) roomId = ridMatch[1]
+          } catch {}
+        }
+      }
+      if (!roomId) {
         return res.status(400).json({ ok: false, error: '无法识别抖音直播间ID' })
       }
-      const roomId = match[1]
-      const webRid = match[1]
+
       try {
-        const resp = await fetch('https://live.douyin.com/web/webcast/web/enter/?aid=6383&app_name=douyin_web&live_id=1&device_platform=web&language=zh-CN&browser_language=zh-CN&browser_platform=Win32&browser_name=Chrome&browser_version=116&web_rid=' + webRid, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36', 'Referer': 'https://live.douyin.com/' }
+        const params = new URLSearchParams({
+          type_id: '0',
+          live_id: '1',
+          room_id: roomId,
+          app_id: '1128'
+        })
+        const resp = await fetch('https://webcast.amemv.com/webcast/room/reflow/info/?' + params.toString(), {
+          headers: {
+            'User-Agent': mobileUA,
+            'Cookie': '_tea_utm_cache_1128={%22utm_source%22:%22copy%22%2C%22utm_medium%22:%22android%22%2C%22utm_campaign%22:%22client_share%22}'
+          }
         })
         const data = await resp.json()
-        const roomData = data?.data?.data?.[0]
-        const streamData = roomData?.stream_data
-        if (streamData) {
-          const parsed = JSON.parse(streamData)
-          const origin = parsed?.data?.[0]
-          if (origin?.main?.flv) streamUrl = origin.main.flv
-          else if (origin?.main?.hls) streamUrl = origin.main.hls
+        const streamUrl = data?.data?.room?.stream_url
+        if (streamUrl) {
+          if (streamUrl.hls_pull_url) streamUrls.hls = streamUrl.hls_pull_url
+          if (streamUrl.rtmp_pull_url) streamUrls.flv = streamUrl.rtmp_pull_url
+          // 也尝试 flv_pull_url
+          if (streamUrl.flv_pull_url) streamUrls.flv = streamUrl.flv_pull_url
         }
-      } catch {}
-      if (!streamUrl) {
+      } catch (e) {
+        console.error('抖音解析请求失败:', e.message)
+      }
+
+      if (!streamUrls.hls && !streamUrls.flv) {
         return res.status(502).json({ ok: false, error: '抖音直播解析失败，请确认直播间是否在直播中' })
       }
     } else if (effectivePlatform === 'bilibili') {
@@ -1182,24 +1218,99 @@ app.post('/api/resolve-livestream', async (req, res) => {
       if (!match) {
         return res.status(400).json({ ok: false, error: '无法识别B站直播间ID' })
       }
-      const roomId = match[1]
+      const rid = match[1]
+
+      // 先获取真实房间号
+      let realRoomId = rid
       try {
-        const resp = await fetch('https://api.live.bilibili.com/room/v1/Room/playUrl?cid=' + roomId + '&qn=10000&platform=web', {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://live.bilibili.com/' }
+        const initResp = await fetch('https://api.live.bilibili.com/room/v1/Room/room_init', {
+          method: 'POST',
+          headers: { 'User-Agent': mobileUA },
+          body: new URLSearchParams({ id: rid })
+        })
+        const initData = await initResp.json()
+        if (initData?.data?.live_status !== 1) {
+          return res.status(502).json({ ok: false, error: 'B站直播间未开播' })
+        }
+        realRoomId = initData.data.room_id
+      } catch (e) {
+        console.error('B站获取真实房间号失败:', e.message)
+      }
+
+      // 获取播放地址
+      try {
+        const params = new URLSearchParams({
+          room_id: String(realRoomId),
+          protocol: '0,1',
+          format: '0,1,2',
+          codec: '0,1',
+          qn: '10000',
+          platform: 'h5',
+          ptype: '8'
+        })
+        const resp = await fetch('https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo?' + params.toString(), {
+          headers: { 'User-Agent': mobileUA }
         })
         const data = await resp.json()
-        const durl = data?.data?.durl
-        if (durl && durl.length > 0) {
-          streamUrl = durl[0].url
+        const streams = data?.data?.playurl_info?.playurl?.stream
+        if (streams && streams.length > 0) {
+          for (const stream of streams) {
+            const formatName = stream?.format?.[0]?.format_name
+            const codec = stream?.format?.[0]?.codec?.[0]
+            if (!codec) continue
+            const baseUrl = codec.base_url
+            const urlInfo = codec.url_info?.[0]
+            if (!baseUrl || !urlInfo) continue
+            const fullUrl = urlInfo.host + baseUrl + urlInfo.extra
+            if (formatName === 'ts' || formatName === 'fmp4') {
+              if (!streamUrls.hls) streamUrls.hls = fullUrl
+            } else if (formatName === 'flv') {
+              if (!streamUrls.flv) streamUrls.flv = fullUrl
+            }
+          }
+          // 如果没找到 hls，尝试从所有 format 中找
+          if (!streamUrls.hls) {
+            for (const stream of streams) {
+              for (const fmt of (stream.format || [])) {
+                const codec = fmt.codec?.[0]
+                if (!codec) continue
+                const baseUrl = codec.base_url
+                const urlInfo = codec.url_info?.[0]
+                if (!baseUrl || !urlInfo) continue
+                const fullUrl = urlInfo.host + baseUrl + urlInfo.extra
+                if (fmt.format_name === 'ts' || fullUrl.includes('.m3u8')) {
+                  streamUrls.hls = fullUrl
+                  break
+                }
+              }
+              if (streamUrls.hls) break
+            }
+          }
+          // 如果还是没有，用第一个可用的
+          if (!streamUrls.hls && !streamUrls.flv) {
+            const firstStream = streams[0]
+            const codec = firstStream?.format?.[0]?.codec?.[0]
+            if (codec?.base_url && codec?.url_info?.[0]) {
+              const urlInfo = codec.url_info[0]
+              streamUrls.hls = urlInfo.host + codec.base_url + urlInfo.extra
+            }
+          }
         }
-      } catch {}
-      if (!streamUrl) {
+      } catch (e) {
+        console.error('B站解析请求失败:', e.message)
+      }
+
+      if (!streamUrls.hls && !streamUrls.flv) {
         return res.status(502).json({ ok: false, error: 'B站直播解析失败，请确认直播间是否在直播中' })
       }
     } else {
       return res.status(400).json({ ok: false, error: '不支持的平台: ' + effectivePlatform })
     }
-    res.json({ ok: true, streamUrl })
+
+    // 优先 HLS，其次 FLV
+    const streamUrl = streamUrls.hls || streamUrls.flv
+    const protocol = streamUrls.hls ? 'hls' : 'flv'
+    res.json({ ok: true, streamUrl, protocol, hls: streamUrls.hls, flv: streamUrls.flv })
   } catch (err) {
     console.error('解析直播地址失败:', err)
     res.status(500).json({ ok: false, error: '服务器内部错误' })

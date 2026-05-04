@@ -1217,6 +1217,7 @@ let hlsInstance = null
 let flvPlayerInstance = null
 const livestreamReady = ref(false)
 const livestreamError = ref('')
+const currentLivestreamUrl = ref('')
 const lastRemotePointerSentAt = ref(0)
 const sharedOutgoingStream = ref(null)
 const sharedIncomingStream = ref(null)
@@ -1386,11 +1387,11 @@ const isValidLivestreamUrl = computed(() => {
     if (!(url.startsWith('http://') || url.startsWith('https://'))) return false
     const lower = url.toLowerCase()
     switch (livestreamPlatform.value) {
-      case 'douyin': return lower.includes('douyin.com') || lower.includes('douyinvod.com')
-      case 'bilibili': return lower.includes('bilibili.com') || lower.includes('bilivideo.com') || lower.includes('.m3u8') || lower.includes('.flv')
-      case 'hls': return lower.includes('.m3u8') || lower.includes('hls')
-      case 'flv': return lower.includes('.flv') || lower.includes('flv')
-      default: return lower.includes('douyin.com') || lower.includes('douyinvod.com') || lower.includes('bilibili.com') || lower.includes('bilivideo.com') || lower.includes('.m3u8') || lower.includes('.flv') || lower.includes('hls') || lower.includes('flv')
+      case 'douyin': return lower.includes('douyin.com')
+      case 'bilibili': return lower.includes('bilibili.com')
+      case 'hls': return lower.includes('.m3u8')
+      case 'flv': return lower.includes('.flv')
+      default: return lower.includes('douyin.com') || lower.includes('bilibili.com') || lower.includes('.m3u8') || lower.includes('.flv')
     }
   } catch {
     return false
@@ -3065,6 +3066,10 @@ function syncSharedVideoElementSource() {
   }
 
   if (activeShare.value.kind === 'livestream' && activeShare.value.url) {
+    // 如果已经在播放同一个直播流，不要重新初始化
+    if (currentLivestreamUrl.value === activeShare.value.url && (hlsInstance || flvPlayerInstance)) {
+      return
+    }
     if (video.srcObject) {
       video.srcObject = null
     }
@@ -5515,12 +5520,13 @@ function destroyLivestreamPlayer() {
   }
   livestreamReady.value = false
   livestreamError.value = ''
+  currentLivestreamUrl.value = ''
 }
 
 function detectStreamProtocol(url) {
   const lower = url.toLowerCase()
-  if (lower.includes('.m3u8') || lower.includes('hls')) return 'hls'
-  if (lower.includes('.flv') || lower.includes('flv')) return 'flv'
+  if (lower.includes('.m3u8')) return 'hls'
+  if (lower.includes('.flv')) return 'flv'
   if (lower.includes('.ts') && !lower.includes('.tsx')) return 'hls'
   return null
 }
@@ -5530,10 +5536,9 @@ function initLivestreamPlayer(url) {
   livestreamReady.value = false
   livestreamError.value = ''
   sharedVideoPlayFailed.value = false
+  currentLivestreamUrl.value = url
 
-  const protocol = livestreamPlatform.value === 'auto'
-    ? detectStreamProtocol(url)
-    : detectStreamProtocol(url)
+  const protocol = activeShare.value?.livestreamProtocol || detectStreamProtocol(url)
 
   nextTick(() => {
     const video = sharedVideoRef.value
@@ -5614,8 +5619,8 @@ function autoDetectPlatform(url) {
   const lower = url.toLowerCase()
   if (lower.includes('douyin.com') || lower.includes('douyinvod.com')) return 'douyin'
   if (lower.includes('bilibili.com') || lower.includes('bilivideo.com')) return 'bilibili'
-  if (lower.includes('.m3u8') || lower.includes('hls')) return 'hls'
-  if (lower.includes('.flv') || lower.includes('flv')) return 'flv'
+  if (lower.includes('.m3u8')) return 'hls'
+  if (lower.includes('.flv')) return 'flv'
   return null
 }
 
@@ -5631,14 +5636,14 @@ function confirmLivestreamShare() {
   const platformLabel = platformLabels[detectedPlatform] || '直播'
   const fileName = '直播 · ' + platformLabel
 
-  const needsResolve = ['douyin', 'bilibili'].includes(detectedPlatform)
-
-  if (needsResolve) {
+  // 抖音和B站需要后端解析
+  if (['douyin', 'bilibili'].includes(detectedPlatform)) {
     resolveAndStartLivestream(url, detectedPlatform)
     return
   }
 
-  startLivestreamShare(url, url, fileName, detectedPlatform)
+  // HLS/FLV 直接播放
+  startLivestreamShare(url, fileName, detectedPlatform)
 }
 
 async function resolveAndStartLivestream(roomUrl, platform) {
@@ -5656,19 +5661,20 @@ async function resolveAndStartLivestream(roomUrl, platform) {
     const platformLabels = { douyin: '抖音', bilibili: '哔哩哔哩' }
     const label = platformLabels[platform] || '直播'
     const fileName = '直播 · ' + label
-    startLivestreamShare(data.streamUrl, roomUrl, fileName, platform)
+    // 使用服务器返回的协议类型（优先hls）
+    const protocol = data.protocol || detectStreamProtocol(data.streamUrl) || 'hls'
+    startLivestreamShare(data.streamUrl, fileName, protocol)
   } catch (err) {
     console.error('解析直播地址失败:', err)
     alert('解析直播地址失败，请稍后重试')
   }
 }
 
-function startLivestreamShare(streamUrl, roomUrl, fileName, platform) {
+function startLivestreamShare(streamUrl, fileName, protocol) {
   closeSharedMedia()
 
   const shareId = 'livestream-' + Date.now()
-  const effectivePlatform = platform || livestreamPlatform.value
-  const protocol = ['auto', 'douyin', 'bilibili'].includes(effectivePlatform) ? detectStreamProtocol(streamUrl) || 'hls' : effectivePlatform
+  const streamProtocol = protocol || detectStreamProtocol(streamUrl) || 'hls'
 
   updateActiveShare({
     id: shareId,
@@ -5681,7 +5687,7 @@ function startLivestreamShare(streamUrl, roomUrl, fileName, platform) {
     url: streamUrl,
     progress: 100,
     deliveryMode: 'livestream',
-    livestreamProtocol: protocol
+    livestreamProtocol: streamProtocol
   })
 
   if (socket.value?.connected) {
@@ -5694,7 +5700,7 @@ function startLivestreamShare(streamUrl, roomUrl, fileName, platform) {
         fileType: 'livestream',
         fileSize: 0,
         deliveryMode: 'livestream',
-        livestreamProtocol: protocol,
+        livestreamProtocol: streamProtocol,
         url: streamUrl
       }
     })
