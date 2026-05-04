@@ -3537,7 +3537,6 @@ function ensureLocalMediaStream() {
 
 function refreshLocalTracksForPeers() {
   Object.keys(peerConnections).forEach((peerId) => {
-    detachLocalTracksFromPeer(peerId)
     syncLocalTracksToPeer(peerId)
     queueSharedNegotiation(peerId)
   })
@@ -4512,20 +4511,6 @@ function syncLocalTracksToPeer(peerId) {
   })
 }
 
-function detachLocalTracksFromPeer(peerId) {
-  const senderCache = localTrackSenders[peerId]
-  if (!senderCache) {
-    return
-  }
-
-  Object.values(senderCache).forEach((sender) => {
-    if (sender) {
-      sender.replaceTrack(null).catch((error) => {
-        console.error('清空本地轨道失败:', error)
-      })
-    }
-  })
-}
 
 async function negotiatePeer(peerId) {
   const pc = peerConnections[peerId]
