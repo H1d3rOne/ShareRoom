@@ -9060,11 +9060,11 @@ onUnmounted(() => {
 
 .member-mic-indicator {
   position: absolute;
-  top: 8px;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
-  width: 26px;
-  height: 26px;
+  transform: translate(-50%, -50%);
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   background: rgba(15, 23, 42, 0.85);
   backdrop-filter: blur(6px);
@@ -9092,8 +9092,8 @@ onUnmounted(() => {
 }
 
 .member-mic-icon {
-  width: 14px;
-  height: 14px;
+  width: 22px;
+  height: 22px;
   stroke: #4ade80;
   fill: none;
   stroke-width: 2;
