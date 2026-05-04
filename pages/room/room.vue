@@ -679,8 +679,7 @@
               <div v-else-if="activeShare.kind === 'livestream'" class="livestream-container">
                 <video
                   ref="livestreamVideoRef"
-                  class="shared-video livestream-video"
-                  style="display:block;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain;"
+                  class="livestream-video"
                   autoplay
                   playsinline
                   muted
@@ -7114,6 +7113,36 @@ onUnmounted(() => {
   justify-content: center;
   background: linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(124, 58, 237, 0.95));
   box-shadow: 0 18px 34px rgba(37, 99, 235, 0.28);
+}
+
+.livestream-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.livestream-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.livestream-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: #f8fafc;
+  background: rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(8px);
+  z-index: 5;
 }
 
 .shared-video-play-icon svg {
