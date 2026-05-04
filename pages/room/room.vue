@@ -2444,9 +2444,11 @@ function restartIncomingStreamHealthMonitor() {
       && now - incomingStreamHealth.lastResyncAt >= STREAM_RESYNC_COOLDOWN_MS
     ) {
       incomingStreamHealth.lastResyncAt = now
-      tryBindSharedIncomingStream(share.ownerId)
-      syncSharedVideoElementSource()
-      requestShareSync(activeShare.value.id)
+      if (share.kind !== 'livestream') {
+        tryBindSharedIncomingStream(share.ownerId)
+        syncSharedVideoElementSource()
+        requestShareSync(activeShare.value.id)
+      }
     }
   }, 1500)
 }
@@ -6271,6 +6273,9 @@ function applyVideoSync(sync, forceSeek = false) {
 
 
 function handleSharedVideoLoaded() {
+  if (activeShare.value?.kind === 'livestream') {
+    return
+  }
   markIncomingStreamHealthy()
   if (
     activeShare.value?.kind === 'video'
@@ -6298,6 +6303,9 @@ function handleSharedVideoLoaded() {
 }
 
 function handleSharedVideoCanPlay() {
+  if (activeShare.value?.kind === 'livestream') {
+    return
+  }
   markIncomingStreamHealthy()
   if (
     activeShare.value?.kind === 'video'
@@ -6325,6 +6333,14 @@ function handleSharedVideoCanPlay() {
 }
 
 function handleSharedVideoPlaying() {
+  if (activeShare.value?.kind === 'livestream') {
+    markIncomingStreamHealthy()
+    livestreamReady.value = true
+    if (!canGlobalControlShare.value && sharedVideoLocalPaused.value && sharedVideoRef.value) {
+      sharedVideoRef.value.pause()
+    }
+    return
+  }
   markIncomingStreamHealthy()
 
   // 非管理员本地暂停时，浏览器 autoplay 可能触发 playing 事件，需重新暂停
@@ -6689,7 +6705,7 @@ watch(
     }
     syncSharedVideoElementSource()
     restartIncomingStreamHealthMonitor()
-    if (activeShare.value?.kind !== 'video') {
+    if (activeShare.value?.kind !== 'video' && activeShare.value?.kind !== 'livestream') {
       syncSharedVideoUiFromState(null)
     }
   },
