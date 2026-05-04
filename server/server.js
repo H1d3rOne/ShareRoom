@@ -2084,7 +2084,7 @@ io.on('connection', (socket) => {
       ownerName: session.userName,
       zoomed: false,
       pointer: null,
-      sync: kind === 'video'
+      sync: (kind === 'video' || kind === 'livestream')
         ? {
             action: 'ready',
             playing: true,
@@ -2137,7 +2137,7 @@ io.on('connection', (socket) => {
     }
 
     let sync = room.sharedMedia.sync
-    if (room.sharedMedia.kind === 'video') {
+    if (room.sharedMedia.kind === 'video' || room.sharedMedia.kind === 'livestream') {
       sync = {
         action: payload.action || 'heartbeat',
         playing: Boolean(payload.playing),

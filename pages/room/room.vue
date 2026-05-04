@@ -676,24 +676,6 @@
                 @timeupdate="handleSharedVideoTimeUpdate"
               ></video>
 
-              <div v-else-if="activeShare.kind === 'livestream'" class="livestream-container">
-                <video
-                  ref="livestreamVideoRef"
-                  class="livestream-video"
-                  autoplay
-                  playsinline
-                  muted
-                ></video>
-                <div v-if="!livestreamReady" class="webpage-loading">
-                  <div class="loader"></div>
-                  <p>正在连接直播流…</p>
-                </div>
-                <div v-if="livestreamError" class="livestream-error">
-                  <p>{{ livestreamError }}</p>
-                  <button class="ghost-btn" @click.stop="retryLivestream">重试</button>
-                </div>
-              </div>
-
               <div v-else-if="activeShare.kind === 'webpage'" ref="webpageShareContainerRef" class="webpage-share-container">
                 <div class="webpage-toolbar">
                   <button
@@ -811,7 +793,7 @@
 
             <div v-if="activeShare.kind !== 'webpage'" class="share-footer">
               <div class="share-meta">
-                <div v-if="activeShare.kind === 'video'" class="video-control-panel">
+                <div v-if="activeShare.kind === 'video' || activeShare.kind === 'livestream'" class="video-control-panel">
                   <button
                     class="control-pill playback-btn"
                     :disabled="!canLocalControlSharedVideo || (!canGlobalControlShare && !sharedVideoLocalPaused && !sharedVideoUi.playing)"
@@ -876,7 +858,7 @@
                 <button v-if="activeShare.kind === 'image' && canManageSharedMedia" class="ghost-btn" @click="toggleSharedImageZoom">
                   {{ activeShare.zoomed ? '还原' : '放大' }}
                 </button>
-                <button v-if="activeShare.kind !== 'video'" class="ghost-btn stage-fullscreen-btn" @click="toggleSharedStageFullscreen">
+                <button v-if="activeShare.kind !== 'video' && activeShare.kind !== 'livestream'" class="ghost-btn stage-fullscreen-btn" @click="toggleSharedStageFullscreen">
                   <svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true">
                     <polyline points="15 3 21 3 21 9"/>
                     <polyline points="9 21 3 21 3 15"/>
@@ -1233,7 +1215,6 @@ const livestreamPlatform = ref('auto')
 const livestreamUrlInputRef = ref(null)
 let hlsInstance = null
 let flvPlayerInstance = null
-const livestreamVideoRef = ref(null)
 const livestreamReady = ref(false)
 const livestreamError = ref('')
 const lastRemotePointerSentAt = ref(0)
@@ -1365,7 +1346,7 @@ const canControlSharedWebpage = computed(() => Boolean(activeShare.value?.kind =
 const canRefreshSharedWebpage = computed(() => Boolean(canControlSharedWebpage.value && activeShare.value?.url))
 const canStepBackwardSharedWebpage = computed(() => canControlSharedWebpage.value && getWebpageHistoryEntries(activeShare.value).length > 1)
 const canStepForwardSharedWebpage = computed(() => canControlSharedWebpage.value && getWebpageHistoryEntries(activeShare.value).length > 1)
-const canLocalControlSharedVideo = computed(() => Boolean(activeShare.value && activeShare.value.kind === 'video' && isConnected.value))
+const canLocalControlSharedVideo = computed(() => Boolean(activeShare.value && (activeShare.value.kind === 'video' || activeShare.value.kind === 'livestream') && isConnected.value))
 const canControlShare = computed(() => isConnected.value && (isShareOwner.value || isRemoteController.value))
 const canManageSharedMedia = computed(() => isConnected.value && (canControlShare.value || isAdmin.value))
 const canCloseGameStage = computed(() => Boolean(canShare.value && (showGameMenu.value || activeGame.value || gameInvite.value)))
@@ -1918,7 +1899,7 @@ const shareStatusText = computed(() => {
     return `已同步给 ${doneCount}/${otherParticipants.value.length} 位成员`
   }
 
-  if (share.kind === 'video' && share.sync) {
+  if ((share.kind === 'video' || share.kind === 'livestream') && share.sync) {
     return isStreamShare(share)
       ? (share.sync.playing ? '正在实时同步播放' : '实时流已暂停')
       : (share.sync.playing ? '正在同步播放' : '当前为暂停状态')
@@ -2085,7 +2066,7 @@ function isStreamShare(share = activeShare.value) {
 }
 
 function isVideoLikeShare(share = activeShare.value) {
-  return Boolean(share && ['video', 'screen'].includes(share.kind))
+  return Boolean(share && ['video', 'screen', 'livestream'].includes(share.kind))
 }
 
 function shouldUseSyncedVideoUi(share = activeShare.value) {
@@ -2101,7 +2082,10 @@ function getShareKindLabel(kind) {
 }
 
 function getSharedVideoSource(share = activeShare.value) {
-  if (!share || share.kind !== 'video') {
+  if (!share || (share.kind !== 'video' && share.kind !== 'livestream')) {
+    return undefined
+  }
+  if (share.kind === 'livestream') {
     return undefined
   }
   if (['stream', 'livekit'].includes(share.deliveryMode) && share.ownerId !== selfId.value) {
@@ -2156,6 +2140,7 @@ function shouldMuteSharedVideo(share = activeShare.value) {
   if (!share || !isVideoLikeShare(share)) {
     return true
   }
+  if (share.kind === 'livestream') return sharedVideoMuted.value
   return sharedVideoMuted.value
 }
 
@@ -2366,7 +2351,7 @@ function restartSharedVideoUiTicker() {
     sharedVideoUiTicker = null
   }
 
-  if (!shouldUseSyncedVideoUi() || !activeShare.value?.sync?.playing || (!canGlobalControlShare.value && sharedVideoLocalPaused.value)) {
+  if ((!shouldUseSyncedVideoUi() && activeShare.value?.kind !== 'livestream') || !activeShare.value?.sync?.playing || (!canGlobalControlShare.value && sharedVideoLocalPaused.value)) {
     return
   }
 
@@ -3075,6 +3060,16 @@ function syncSharedVideoElementSource() {
     return
   }
 
+  if (activeShare.value.kind === 'livestream' && activeShare.value.url) {
+    if (video.srcObject) {
+      video.srcObject = null
+    }
+    video.removeAttribute('src')
+    video.src = ''
+    initLivestreamPlayer(activeShare.value.url)
+    return
+  }
+
   if (video.srcObject) {
     video.srcObject = null
   }
@@ -3128,7 +3123,7 @@ function updateActiveShare(patch) {
   }
 
   activeShare.value = nextShare
-  if (nextShare.kind === 'video') {
+  if (nextShare.kind === 'video' || nextShare.kind === 'livestream') {
     syncSharedVideoUiFromState(nextShare.sync)
   } else {
     syncSharedVideoUiFromState(null)
@@ -3216,7 +3211,7 @@ function openIncomingShare(media) {
     streamId: media.streamId || null,
     livestreamProtocol: media.livestreamProtocol || '',
     pointer: media.pointer || null,
-    sync: media.sync || (media.kind === 'video'
+    sync: media.sync || ((media.kind === 'video' || media.kind === 'livestream')
       ? {
           action: 'ready',
           playing: true,
@@ -3238,7 +3233,7 @@ function openIncomingShare(media) {
     }
   }
 
-  if (media.kind === 'video') {
+  if (media.kind === 'video' || media.kind === 'livestream') {
     sharedVideoMuted.value = Boolean(media.sync?.muted ?? true)
     sharedVideoUi.muted = sharedVideoMuted.value
   }
@@ -5144,7 +5139,7 @@ function connectSocket() {
       controllerId: sync?.controllerId || senderId || activeShare.value.controllerId
     })
 
-    if (activeShare.value.kind === 'video') {
+    if (activeShare.value.kind === 'video' || activeShare.value.kind === 'livestream') {
       applyVideoSync(sync, sync?.action === 'seek')
     }
   })
@@ -5530,13 +5525,14 @@ function initLivestreamPlayer(url) {
   destroyLivestreamPlayer()
   livestreamReady.value = false
   livestreamError.value = ''
+  sharedVideoPlayFailed.value = false
 
   const protocol = livestreamPlatform.value === 'auto'
     ? detectStreamProtocol(url)
-    : livestreamPlatform.value
+    : detectStreamProtocol(url)
 
   nextTick(() => {
-    const video = livestreamVideoRef.value
+    const video = sharedVideoRef.value
     if (!video) return
 
     if (protocol === 'hls' || (!protocol && url.includes('.m3u8'))) {
@@ -5554,6 +5550,8 @@ function initLivestreamPlayer(url) {
         hlsInstance.attachMedia(video)
         hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
           livestreamReady.value = true
+          sharedVideoUi.playing = true
+          sharedVideoUi.duration = Number(video.duration || 0)
           video.play().catch(() => {})
         })
         hlsInstance.on(Hls.Events.ERROR, (event, data) => {
@@ -5571,6 +5569,8 @@ function initLivestreamPlayer(url) {
         video.src = url
         video.addEventListener('loadedmetadata', () => {
           livestreamReady.value = true
+          sharedVideoUi.playing = true
+          sharedVideoUi.duration = Number(video.duration || 0)
           video.play().catch(() => {})
         }, { once: true })
       } else {
@@ -5591,6 +5591,8 @@ function initLivestreamPlayer(url) {
         flvPlayerInstance.play()
         flvPlayerInstance.on(flvjs.Events.MEDIA_INFO, () => {
           livestreamReady.value = true
+          sharedVideoUi.playing = true
+          sharedVideoUi.duration = Number(video.duration || 0)
         })
         flvPlayerInstance.on(flvjs.Events.ERROR, (errType, errDetail) => {
           livestreamError.value = 'FLV 流加载失败: ' + errDetail
@@ -6280,7 +6282,7 @@ function handleSharedVideoLoaded() {
     sharedVideoUi.playing = Boolean(!sharedVideoRef.value.paused && !sharedVideoRef.value.ended)
   }
 
-  if (activeShare.value?.kind === 'video' && activeShare.value.sync) {
+  if ((activeShare.value?.kind === 'video' || activeShare.value?.kind === 'livestream') && activeShare.value.sync) {
     applyVideoSync(activeShare.value.sync, true)
   }
 }
@@ -6307,7 +6309,7 @@ function handleSharedVideoCanPlay() {
     sharedVideoUi.playing = Boolean(!sharedVideoRef.value.paused && !sharedVideoRef.value.ended)
   }
 
-  if (activeShare.value?.kind === 'video' && activeShare.value.sync) {
+  if ((activeShare.value?.kind === 'video' || activeShare.value?.kind === 'livestream') && activeShare.value.sync) {
     applyVideoSync(activeShare.value.sync, false)
   }
 }
@@ -6332,7 +6334,7 @@ function handleSharedVideoPlaying() {
 }
 
 function handleSharedVideoPlay() {
-  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canGlobalControlShare.value) {
+  if (shouldSuppressShareEvents() || (activeShare.value?.kind !== 'video' && activeShare.value?.kind !== 'livestream') || !canGlobalControlShare.value) {
     return
   }
   sharedVideoUi.playing = true
@@ -6344,7 +6346,7 @@ function handleSharedVideoPlay() {
 }
 
 function handleSharedVideoPause() {
-  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canGlobalControlShare.value) {
+  if (shouldSuppressShareEvents() || (activeShare.value?.kind !== 'video' && activeShare.value?.kind !== 'livestream') || !canGlobalControlShare.value) {
     return
   }
   sharedVideoUi.playing = false
@@ -6356,7 +6358,7 @@ function handleSharedVideoPause() {
 }
 
 function handleSharedVideoSeek() {
-  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canGlobalControlShare.value) {
+  if (shouldSuppressShareEvents() || (activeShare.value?.kind !== 'video' && activeShare.value?.kind !== 'livestream') || !canGlobalControlShare.value) {
     return
   }
 
@@ -6384,7 +6386,7 @@ function handleSharedVideoTimeUpdate() {
     sharedVideoUi.playing = Boolean(!sharedVideoRef.value.paused && !sharedVideoRef.value.ended)
   }
 
-  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'video' || !canGlobalControlShare.value) {
+  if (shouldSuppressShareEvents() || (activeShare.value?.kind !== 'video' && activeShare.value?.kind !== 'livestream') || !canGlobalControlShare.value) {
     return
   }
 
@@ -6406,7 +6408,7 @@ function handleSharedVideoTimeUpdate() {
 }
 
 function toggleSharedVideoPlayback() {
-  if (!canLocalControlSharedVideo.value || activeShare.value?.kind !== 'video' || !sharedVideoRef.value) {
+  if (!canLocalControlSharedVideo.value || (activeShare.value?.kind !== 'video' && activeShare.value?.kind !== 'livestream') || !sharedVideoRef.value) {
     return
   }
 
@@ -6495,13 +6497,22 @@ function toggleSharedVideoPlayback() {
 }
 
 function handleSharedVideoProgressInput(event) {
-  if (!canGlobalControlShare.value || activeShare.value?.kind !== 'video' || !sharedVideoRef.value) {
+  if (!canGlobalControlShare.value || (activeShare.value?.kind !== 'video' && activeShare.value?.kind !== 'livestream') || !sharedVideoRef.value) {
     return
   }
 
-  const nextTime = Number(event.target.value)
+  let nextTime = Number(event.target.value)
   if (!Number.isFinite(nextTime)) {
     return
+  }
+
+  // 直播模式下进度条只能回退，不能超过当前播放进度
+  if (activeShare.value?.kind === 'livestream') {
+    const currentLiveTime = sharedVideoRef.value.currentTime || 0
+    if (nextTime > currentLiveTime) {
+      nextTime = currentLiveTime
+      event.target.value = nextTime
+    }
   }
 
   if (shouldUseSyncedVideoUi()) {
@@ -7115,35 +7126,7 @@ onUnmounted(() => {
   box-shadow: 0 18px 34px rgba(37, 99, 235, 0.28);
 }
 
-.livestream-container {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 
-.livestream-video {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.livestream-error {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  color: #f8fafc;
-  background: rgba(2, 6, 23, 0.62);
-  backdrop-filter: blur(8px);
-  z-index: 5;
-}
 
 .shared-video-play-icon svg {
   width: 26px;
