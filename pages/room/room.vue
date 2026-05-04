@@ -1171,7 +1171,7 @@
         </div>
         <div class="modal-footer">
           <button class="secondary-btn" @click="closeLivestreamDialog">取消</button>
-          <button class="primary-btn" :disabled="!isValidLivestreamUrl" @click="confirmLivestreamShare">开始共享</button>
+          <button class="primary-btn" :disabled="!isValidLivestreamUrl || livestreamResolving" @click="confirmLivestreamShare">{{ livestreamResolving ? '解析中...' : '开始共享' }}</button>
         </div>
       </div>
     </div>
@@ -1235,6 +1235,7 @@ const livestreamPlatform = ref('auto')
 const livestreamUrlInputRef = ref(null)
 let hlsInstance = null
 let flvPlayerInstance = null
+const livestreamResolving = ref(false)
 const livestreamReady = ref(false)
 const livestreamError = ref('')
 const livestreamSeekableDuration = computed(() => {
@@ -2349,11 +2350,11 @@ function getResolvedSharedVideoDuration(sync = activeShare.value?.sync) {
   }
 
   const elementDuration = Number(sharedVideoRef.value?.duration)
-  // 直播流 duration 可能是 Infinity，用 currentTime 作为兜底
   if (Number.isFinite(elementDuration) && elementDuration > 0) {
     return elementDuration
   }
   if (activeShare.value?.kind === 'livestream') {
+    // 直播流不使用 duration，进度条由 seekable range 控制
     return 0
   }
 
@@ -5569,6 +5570,7 @@ function closeLivestreamDialog() {
   showLivestreamDialog.value = false
   livestreamUrlInput.value = ''
   livestreamPlatform.value = 'auto'
+  livestreamResolving.value = false
 }
 
 function destroyLivestreamPlayer() {
@@ -5696,7 +5698,10 @@ function confirmLivestreamShare() {
 
   // 抖音和B站需要后端解析
   if (['douyin', 'bilibili'].includes(detectedPlatform)) {
-    resolveAndStartLivestream(url, detectedPlatform)
+    livestreamResolving.value = true
+    resolveAndStartLivestream(url, detectedPlatform).finally(() => {
+      livestreamResolving.value = false
+    })
     return
   }
 
@@ -5745,7 +5750,16 @@ function startLivestreamShare(streamUrl, fileName, protocol) {
     url: streamUrl,
     progress: 100,
     deliveryMode: 'livestream',
-    livestreamProtocol: streamProtocol
+    livestreamProtocol: streamProtocol,
+    sync: {
+      action: 'ready',
+      playing: true,
+      currentTime: 0,
+      duration: 0,
+      muted: false,
+      updatedAt: Date.now(),
+      controllerId: selfId.value
+    }
   })
 
   if (socket.value?.connected) {
@@ -6354,6 +6368,14 @@ function applyVideoSync(sync, forceSeek = false) {
 
 function handleSharedVideoLoaded() {
   if (activeShare.value?.kind === 'livestream') {
+    // 直播流：更新播放状态，不同步时间
+    if (sharedVideoRef.value) {
+      sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
+      sharedVideoUi.playing = Boolean(!sharedVideoRef.value.paused && !sharedVideoRef.value.ended)
+    }
+    if (activeShare.value.sync && activeShare.value.sync.playing) {
+      applyVideoSync(activeShare.value.sync, false)
+    }
     return
   }
   markIncomingStreamHealthy()
@@ -6387,6 +6409,14 @@ function handleSharedVideoLoaded() {
 
 function handleSharedVideoCanPlay() {
   if (activeShare.value?.kind === 'livestream') {
+    // 直播流：更新播放状态，确保开始播放
+    if (sharedVideoRef.value) {
+      sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
+      sharedVideoUi.playing = Boolean(!sharedVideoRef.value.paused && !sharedVideoRef.value.ended)
+    }
+    if (activeShare.value.sync && activeShare.value.sync.playing && sharedVideoRef.value?.paused) {
+      playSharedVideoSafely({ source: '直播canplay自动播放' })
+    }
     return
   }
   markIncomingStreamHealthy()
@@ -6422,8 +6452,17 @@ function handleSharedVideoPlaying() {
   if (activeShare.value?.kind === 'livestream') {
     markIncomingStreamHealthy()
     livestreamReady.value = true
+    sharedVideoUi.playing = true
+    // 非管理员本地暂停时，浏览器 autoplay 可能触发 playing 事件，需重新暂停
     if (!canGlobalControlShare.value && sharedVideoLocalPaused.value && sharedVideoRef.value) {
       sharedVideoRef.value.pause()
+      sharedVideoUi.playing = false
+      return
+    }
+    // 确保同步状态为播放中
+    if (activeShare.value.sync) {
+      activeShare.value.sync.playing = true
+      activeShare.value.sync.updatedAt = Date.now()
     }
     return
   }
@@ -6458,6 +6497,18 @@ function handleSharedVideoPlay() {
 }
 
 function handleSharedVideoPause() {
+  // 直播流：浏览器可能因缓冲暂停，不要同步暂停状态
+  if (activeShare.value?.kind === 'livestream') {
+    if (!sharedVideoLocalPaused.value && canGlobalControlShare.value) {
+      // 非用户主动暂停（如缓冲），自动恢复播放
+      if (sharedVideoRef.value && activeShare.value.sync?.playing !== false) {
+        playSharedVideoSafely({ source: '直播缓冲自动恢复' })
+      }
+    }
+    if (!canGlobalControlShare.value) {
+      return
+    }
+  }
   if (shouldSuppressShareEvents() || (activeShare.value?.kind !== 'video' && activeShare.value?.kind !== 'livestream') || !canGlobalControlShare.value) {
     return
   }
