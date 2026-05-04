@@ -1205,6 +1205,7 @@ const peerStreamCatalog = reactive({})
 const memberVideoElements = reactive({})
 const openMemberMenuId = ref('')
 const peerAudioLevels = reactive({})
+const peerMediaVersion = reactive({})
 const peerAudioContexts = {}
 const peerAudioAnalysers = {}
 let audioLevelRafId = null
@@ -3207,6 +3208,7 @@ function attachPeerStreamTrackListeners(peerId, stream) {
   if (!stream || stream.__trackListenersAttached) return
   stream.__trackListenersAttached = true
   const refresh = () => {
+    peerMediaVersion[peerId] = (peerMediaVersion[peerId] || 0) + 1
     nextTick(() => refreshPeerDisplayStream(peerId))
   }
   stream.getTracks().forEach((track) => {
@@ -3335,13 +3337,15 @@ function refreshPeerDisplayStream(peerId) {
 }
 
 function hasPeerAudio(peerId) {
+  void peerMediaVersion[peerId]
   const stream = peerId === selfId.value ? localMediaStream.value : remoteStreams[peerId]
-  return Boolean(stream?.getAudioTracks().some((t) => t.readyState === 'live'))
+  return Boolean(stream?.getAudioTracks().some((t) => t.readyState === 'live' && !t.muted))
 }
 
 function hasPeerVideo(peerId) {
+  void peerMediaVersion[peerId]
   const stream = peerId === selfId.value ? localMediaStream.value : remoteStreams[peerId]
-  return hasLiveVideoTrack(stream)
+  return Boolean(stream?.getVideoTracks().some((t) => t.readyState === 'live' && !t.muted))
 }
 
 function hasMemberActions(peer) {
