@@ -9030,7 +9030,9 @@ onUnmounted(() => {
 
 .member-card.speaking {
   border-color: #22c55e;
-  border-width: 2px;
+  border-width: 3px;
+  animation: member-speaking-pulse 0.8s ease-in-out infinite;
+  transform: scale(1.02);
 }
 
 .speaking-ring {
@@ -9041,6 +9043,15 @@ onUnmounted(() => {
   animation: speaking-ripple 1.2s ease-in-out infinite;
   pointer-events: none;
   z-index: 4;
+}
+
+@keyframes member-speaking-pulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.5), 0 0 20px rgba(34, 197, 94, 0.25), inset 0 0 8px rgba(34, 197, 94, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(34, 197, 94, 0.7), 0 0 32px rgba(34, 197, 94, 0.4), inset 0 0 14px rgba(34, 197, 94, 0.2);
+  }
 }
 
 @keyframes speaking-ripple {
@@ -9064,13 +9075,13 @@ onUnmounted(() => {
 
 .member-mic-indicator {
   position: absolute;
-  top: 50%;
+  top: 8px;
   left: 50%;
-  transform: translate(-50%, -50%);
-  width: 42px;
-  height: 42px;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  background: rgba(15, 23, 42, 0.75);
+  background: rgba(15, 23, 42, 0.85);
   backdrop-filter: blur(6px);
   border: 2px solid rgba(148, 163, 184, 0.3);
   display: grid;
@@ -9080,14 +9091,24 @@ onUnmounted(() => {
 }
 
 .member-mic-indicator.mic-active {
-  background: rgba(34, 197, 94, 0.25);
+  background: rgba(34, 197, 94, 0.3);
   border-color: #22c55e;
-  box-shadow: 0 0 12px rgba(34, 197, 94, 0.5), 0 0 30px rgba(34, 197, 94, 0.2);
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+  animation: mic-breathe 0.8s ease-in-out infinite;
+}
+
+@keyframes mic-breathe {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(34, 197, 94, 0.7);
+  }
 }
 
 .member-mic-icon {
-  width: 20px;
-  height: 20px;
+  width: 14px;
+  height: 14px;
   stroke: #4ade80;
   fill: none;
   stroke-width: 2;
