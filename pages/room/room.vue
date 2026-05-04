@@ -3583,7 +3583,21 @@ function removeLocalTrack(kind) {
   updateLocalMediaFlags()
   syncMemberVideo(selfId.value)
   manageLocalAudioMonitor()
-  refreshLocalTracksForPeers()
+  removeLocalTrackFromPeers(kind)
+}
+
+function removeLocalTrackFromPeers(kind) {
+  Object.keys(peerConnections).forEach((peerId) => {
+    const pc = peerConnections[peerId]
+    if (!pc) return
+    const senderCache = localTrackSenders[peerId]
+    const sender = senderCache?.[kind]
+    if (sender) {
+      try { pc.removeTrack(sender) } catch (e) {}
+      senderCache[kind] = null
+    }
+    queueSharedNegotiation(peerId)
+  })
 }
 
 function ensurePeerSenderCache(store, peerId) {
