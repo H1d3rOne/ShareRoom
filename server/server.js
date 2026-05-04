@@ -1036,6 +1036,67 @@ app.post('/api/realtime-share/token', async (req, res) => {
   res.json(payload)
 })
 
+app.post('/api/resolve-livestream', async (req, res) => {
+  const { platform, url } = req.body || {}
+  if (!url || !platform) {
+    return res.status(400).json({ ok: false, error: '缺少参数' })
+  }
+
+  try {
+    let streamUrl = null
+    if (platform === 'douyin') {
+      const match = url.match(/live\.douyin\.com\/(\d+)/)
+      if (!match) {
+        return res.status(400).json({ ok: false, error: '无法识别抖音直播间ID' })
+      }
+      const roomId = match[1]
+      const webRid = match[1]
+      try {
+        const resp = await fetch('https://live.douyin.com/web/webcast/web/enter/?aid=6383&app_name=douyin_web&live_id=1&device_platform=web&language=zh-CN&browser_language=zh-CN&browser_platform=Win32&browser_name=Chrome&browser_version=116&web_rid=' + webRid, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36', 'Referer': 'https://live.douyin.com/' }
+        })
+        const data = await resp.json()
+        const roomData = data?.data?.data?.[0]
+        const streamData = roomData?.stream_data
+        if (streamData) {
+          const parsed = JSON.parse(streamData)
+          const origin = parsed?.data?.[0]
+          if (origin?.main?.flv) streamUrl = origin.main.flv
+          else if (origin?.main?.hls) streamUrl = origin.main.hls
+        }
+      } catch {}
+      if (!streamUrl) {
+        return res.status(502).json({ ok: false, error: '抖音直播解析失败，请确认直播间是否在直播中' })
+      }
+    } else if (platform === 'bilibili') {
+      const match = url.match(/live\.bilibili\.com\/(\d+)/)
+      if (!match) {
+        return res.status(400).json({ ok: false, error: '无法识别B站直播间ID' })
+      }
+      const roomId = match[1]
+      try {
+        const resp = await fetch('https://api.live.bilibili.com/room/v1/Room/playUrl?cid=' + roomId + '&qn=10000&platform=web', {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://live.bilibili.com/' }
+        })
+        const data = await resp.json()
+        const durl = data?.data?.durl
+        if (durl && durl.length > 0) {
+          streamUrl = durl[0].url
+        }
+      } catch {}
+      if (!streamUrl) {
+        return res.status(502).json({ ok: false, error: 'B站直播解析失败，请确认直播间是否在直播中' })
+      }
+    } else {
+      return res.status(400).json({ ok: false, error: '不支持的平台: ' + platform })
+    }
+    res.json({ ok: true, streamUrl })
+  } catch (err) {
+    console.error('解析直播地址失败:', err)
+    res.status(500).json({ ok: false, error: '服务器内部错误' })
+  }
+})
+
 if (hasDistBuild) {
   app.use(express.static(distPath))
   app.get('/{*path}', (req, res) => {

@@ -1150,21 +1150,22 @@
             v-model="livestreamPlatform"
             class="text-input"
           >
-            <option value="auto">自动识别</option>
+            <option value="douyin">抖音</option>
+            <option value="bilibili">哔哩哔哩</option>
             <option value="hls">HLS 流</option>
             <option value="flv">FLV 流</option>
           </select>
-          <label class="input-label" for="livestream-url-input" style="margin-top:12px;">输入直播流地址</label>
+          <label class="input-label" for="livestream-url-input" style="margin-top:12px;">输入直播地址</label>
           <input
             id="livestream-url-input"
             ref="livestreamUrlInputRef"
             v-model="livestreamUrlInput"
             type="url"
             class="text-input"
-            placeholder="https://example.com/live/stream.m3u8"
+            :placeholder="livestreamPlaceholder"
             @keyup.enter="confirmLivestreamShare"
           />
-          <p class="input-hint">支持 HLS (.m3u8) 和 FLV 直播流地址，房间成员将同步观看。</p>
+          <p class="input-hint">{{ livestreamHint }}</p>
         </div>
         <div class="modal-footer">
           <button class="secondary-btn" @click="closeLivestreamDialog">取消</button>
@@ -1378,6 +1379,24 @@ const isValidWebpageUrl = computed(() => {
     return false
   }
 })
+const livestreamPlaceholder = computed(() => {
+  switch (livestreamPlatform.value) {
+    case 'douyin': return 'https://live.douyin.com/xxxxxxxx'
+    case 'bilibili': return 'https://live.bilibili.com/xxxxxxxx'
+    case 'hls': return 'https://example.com/live/stream.m3u8'
+    case 'flv': return 'https://example.com/live/stream.flv'
+    default: return '输入直播地址'
+  }
+})
+const livestreamHint = computed(() => {
+  switch (livestreamPlatform.value) {
+    case 'douyin': return '输入抖音直播间地址，系统将自动解析直播流。'
+    case 'bilibili': return '输入哔哩哔哩直播间地址，系统将自动解析直播流。'
+    case 'hls': return '输入 HLS (.m3u8) 直播流地址，房间成员将同步观看。'
+    case 'flv': return '输入 FLV 直播流地址，房间成员将同步观看。'
+    default: return '输入直播地址，房间成员将同步观看。'
+  }
+})
 const isValidLivestreamUrl = computed(() => {
   const url = livestreamUrlInput.value.trim()
   if (!url) return false
@@ -1385,9 +1404,13 @@ const isValidLivestreamUrl = computed(() => {
     new URL(url)
     if (!(url.startsWith('http://') || url.startsWith('https://'))) return false
     const lower = url.toLowerCase()
-    if (livestreamPlatform.value === 'hls') return lower.includes('.m3u8') || lower.includes('hls')
-    if (livestreamPlatform.value === 'flv') return lower.includes('.flv') || lower.includes('flv')
-    return lower.includes('.m3u8') || lower.includes('.flv') || lower.includes('hls') || lower.includes('flv')
+    switch (livestreamPlatform.value) {
+      case 'douyin': return lower.includes('douyin.com') || lower.includes('douyinvod.com')
+      case 'bilibili': return lower.includes('bilibili.com') || lower.includes('bilivideo.com') || lower.includes('.m3u8') || lower.includes('.flv')
+      case 'hls': return lower.includes('.m3u8') || lower.includes('hls')
+      case 'flv': return lower.includes('.flv') || lower.includes('flv')
+      default: return true
+    }
   } catch {
     return false
   }
@@ -5468,7 +5491,7 @@ function openLivestreamDialog() {
     return
   }
   livestreamUrlInput.value = ''
-  livestreamPlatform.value = 'auto'
+  livestreamPlatform.value = 'douyin'
   livestreamError.value = ''
   showLivestreamDialog.value = true
   nextTick(() => {
@@ -5479,7 +5502,7 @@ function openLivestreamDialog() {
 function closeLivestreamDialog() {
   showLivestreamDialog.value = false
   livestreamUrlInput.value = ''
-  livestreamPlatform.value = 'auto'
+  livestreamPlatform.value = 'douyin'
 }
 
 function destroyLivestreamPlayer() {
@@ -5573,17 +5596,52 @@ function initLivestreamPlayer(url) {
 function confirmLivestreamShare() {
   const url = livestreamUrlInput.value.trim()
   if (!isValidLivestreamUrl.value) {
-    alert('请输入有效的直播流地址')
+    alert('请输入有效的直播地址')
     return
   }
 
-  const platformLabel = livestreamPlatform.value === 'hls' ? 'HLS'
-    : livestreamPlatform.value === 'flv' ? 'FLV' : '直播'
-  const fileName = 
+  const platformLabels = { douyin: '抖音', bilibili: '哔哩哔哩', hls: 'HLS', flv: 'FLV' }
+  const platformLabel = platformLabels[livestreamPlatform.value] || '直播'
+  const fileName = '直播 · ' + platformLabel
 
+  const needsResolve = ['douyin', 'bilibili'].includes(livestreamPlatform.value)
+
+  if (needsResolve) {
+    resolveAndStartLivestream(url)
+    return
+  }
+
+  startLivestreamShare(url, url, fileName)
+}
+
+async function resolveAndStartLivestream(roomUrl) {
+  try {
+    const resp = await fetch('/api/resolve-livestream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ platform: livestreamPlatform.value, url: roomUrl })
+    })
+    const data = await resp.json()
+    if (!data.ok || !data.streamUrl) {
+      alert(data.error || '解析直播地址失败，请检查直播间是否在线')
+      return
+    }
+    const platformLabels = { douyin: '抖音', bilibili: '哔哩哔哩' }
+    const label = platformLabels[livestreamPlatform.value] || '直播'
+    const fileName = '直播 · ' + label
+    startLivestreamShare(data.streamUrl, roomUrl, fileName)
+  } catch (err) {
+    console.error('解析直播地址失败:', err)
+    alert('解析直播地址失败，请稍后重试')
+  }
+}
+
+function startLivestreamShare(streamUrl, roomUrl, fileName) {
   closeSharedMedia()
 
-  const shareId = 
+  const shareId = 'livestream-' + Date.now()
+  const protocol = livestreamPlatform.value === 'auto' ? detectStreamProtocol(streamUrl) || 'hls' : livestreamPlatform.value === 'douyin' || livestreamPlatform.value === 'bilibili' ? detectStreamProtocol(streamUrl) || 'hls' : livestreamPlatform.value
+
   updateActiveShare({
     id: shareId,
     kind: 'livestream',
@@ -5592,10 +5650,10 @@ function confirmLivestreamShare() {
     fileSize: 0,
     ownerId: selfId.value,
     ownerName: displayName.value,
-    url,
+    url: streamUrl,
     progress: 100,
     deliveryMode: 'livestream',
-    livestreamProtocol: livestreamPlatform.value === 'auto' ? detectStreamProtocol(url) || 'hls' : livestreamPlatform.value
+    livestreamProtocol: protocol
   })
 
   if (socket.value?.connected) {
@@ -5608,17 +5666,17 @@ function confirmLivestreamShare() {
         fileType: 'livestream',
         fileSize: 0,
         deliveryMode: 'livestream',
-        livestreamProtocol: livestreamPlatform.value === 'auto' ? detectStreamProtocol(url) || 'hls' : livestreamPlatform.value,
-        url
+        livestreamProtocol: protocol,
+        url: streamUrl
       }
     })
   }
 
   closeLivestreamDialog()
-  pushSystemMessage()
+  pushSystemMessage('开始共享直播: ' + fileName)
 
   nextTick(() => {
-    initLivestreamPlayer(url)
+    initLivestreamPlayer(streamUrl)
   })
 }
 

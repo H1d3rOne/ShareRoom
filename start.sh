@@ -55,6 +55,12 @@ mkdir -p "$PID_DIR"
 print_warning "检查并停止旧的 ShareRoom 进程..."
 stop_existing_app
 
+print_warning "检查并安装依赖..."
+(cd "$PROJECT_ROOT" && npm install) || {
+  print_error "依赖安装失败，启动中止"
+  exit 1
+}
+
 print_warning "构建前端资源..."
 (cd "$PROJECT_ROOT" && npm run build) || {
   print_error "构建失败，启动中止"
