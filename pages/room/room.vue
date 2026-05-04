@@ -2305,8 +2305,12 @@ function getResolvedSharedVideoDuration(sync = activeShare.value?.sync) {
   }
 
   const elementDuration = Number(sharedVideoRef.value?.duration)
+  // 直播流 duration 可能是 Infinity，用 currentTime 作为兜底
   if (Number.isFinite(elementDuration) && elementDuration > 0) {
     return elementDuration
+  }
+  if (activeShare.value?.kind === 'livestream') {
+    return Number(sharedVideoRef.value?.currentTime || 0)
   }
 
   const sharedDuration = Number(activeShare.value?.duration)
@@ -5551,7 +5555,7 @@ function initLivestreamPlayer(url) {
         hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
           livestreamReady.value = true
           sharedVideoUi.playing = true
-          sharedVideoUi.duration = Number(video.duration || 0)
+          sharedVideoUi.duration = Number.isFinite(video.duration) ? video.duration : 0
           video.play().catch(() => {})
         })
         hlsInstance.on(Hls.Events.ERROR, (event, data) => {
@@ -5570,7 +5574,7 @@ function initLivestreamPlayer(url) {
         video.addEventListener('loadedmetadata', () => {
           livestreamReady.value = true
           sharedVideoUi.playing = true
-          sharedVideoUi.duration = Number(video.duration || 0)
+          sharedVideoUi.duration = Number.isFinite(video.duration) ? video.duration : 0
           video.play().catch(() => {})
         }, { once: true })
       } else {
@@ -5592,7 +5596,7 @@ function initLivestreamPlayer(url) {
         flvPlayerInstance.on(flvjs.Events.MEDIA_INFO, () => {
           livestreamReady.value = true
           sharedVideoUi.playing = true
-          sharedVideoUi.duration = Number(video.duration || 0)
+          sharedVideoUi.duration = Number.isFinite(video.duration) ? video.duration : 0
         })
         flvPlayerInstance.on(flvjs.Events.ERROR, (errType, errDetail) => {
           livestreamError.value = 'FLV 流加载失败: ' + errDetail
@@ -6382,7 +6386,11 @@ function handleSharedVideoTimeUpdate() {
 
   if (sharedVideoRef.value && !shouldUseSyncedVideoUi()) {
     sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
-    sharedVideoUi.duration = Number(sharedVideoRef.value.duration || activeShare.value?.sync?.duration || 0)
+    const rawDuration = Number(sharedVideoRef.value.duration || 0)
+    // 直播流的 duration 可能是 Infinity，用 currentTime 作为进度条上限
+    sharedVideoUi.duration = (activeShare.value?.kind === 'livestream' || !Number.isFinite(rawDuration) || rawDuration <= 0)
+      ? Math.max(sharedVideoUi.currentTime, Number(activeShare.value?.sync?.duration || 0))
+      : rawDuration
     sharedVideoUi.playing = Boolean(!sharedVideoRef.value.paused && !sharedVideoRef.value.ended)
   }
 
@@ -6403,7 +6411,7 @@ function handleSharedVideoTimeUpdate() {
   emitShareControl('heartbeat', {
     currentTime: sharedVideoRef.value.currentTime,
     playing: true,
-    duration: Number(sharedVideoRef.value?.duration || activeShare.value?.sync?.duration || 0)
+    duration: sharedVideoUi.duration
   })
 }
 
