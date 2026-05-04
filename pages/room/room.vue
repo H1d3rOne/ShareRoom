@@ -5542,8 +5542,16 @@ function initLivestreamPlayer(url) {
 
     if (protocol === 'hls' || (!protocol && url.includes('.m3u8'))) {
       if (Hls.isSupported()) {
-        hlsInstance = new Hls({ liveDurationInfinity: true, maxBufferLength: 10 })
-        hlsInstance.loadSource(url)
+        hlsInstance = new Hls({
+          liveDurationInfinity: true,
+          maxBufferLength: 10,
+          xhrSetup: (xhr, reqUrl) => {
+            // 非代理地址不做处理
+          }
+        })
+        const isLocalOrProxy = url.startsWith(window.location.origin) || url.startsWith('/api/')
+        const proxyUrl = isLocalOrProxy ? url : '/api/hls-proxy?url=' + encodeURIComponent(url)
+        hlsInstance.loadSource(proxyUrl)
         hlsInstance.attachMedia(video)
         hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
           livestreamReady.value = true
@@ -5571,10 +5579,13 @@ function initLivestreamPlayer(url) {
       }
     } else if (protocol === 'flv' || (!protocol && url.includes('.flv'))) {
       if (flvjs.isSupported()) {
+        const isLocalOrProxy = url.startsWith(window.location.origin) || url.startsWith('/api/')
+        const flvUrl = isLocalOrProxy ? url : '/api/flv-proxy?url=' + encodeURIComponent(url)
         flvPlayerInstance = flvjs.createPlayer({
           type: 'flv',
-          url,
-          isLive: true
+          url: flvUrl,
+          isLive: true,
+          cors: true
         })
         flvPlayerInstance.attachMediaElement(video)
         flvPlayerInstance.load()

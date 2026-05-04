@@ -1018,6 +1018,109 @@ app.all('/webpage-proxy', (req, res) => {
   res.status(404).json({ error: 'webpage proxy removed' })
 })
 
+app.get('/api/hls-proxy', async (req, res) => {
+  const targetUrl = req.query.url
+  if (!targetUrl) {
+    return res.status(400).send('missing url param')
+  }
+  try {
+    const resp = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': new URL(targetUrl).origin + '/'
+      }
+    })
+    if (!resp.ok) {
+      return res.status(resp.status).send('upstream error: ' + resp.status)
+    }
+    const contentType = resp.headers.get('content-type') || ''
+    const text = await resp.text()
+
+    // Rewrite relative segment URLs in m3u8 to go through our proxy
+    const baseUrl = new URL(targetUrl)
+    const rewritten = text.replace(/(^[^#][^\s]*$)/gm, (match) => {
+      const line = match.trim()
+      if (!line || line.startsWith('#')) return match
+      try {
+        const absolute = new URL(line, baseUrl).href
+        if (line.includes('.m3u8')) {
+          return '/api/hls-proxy?url=' + encodeURIComponent(absolute)
+        }
+        return '/api/segment-proxy?url=' + encodeURIComponent(absolute)
+      } catch {
+        return match
+      }
+    })
+
+    res.set('Content-Type', contentType.includes('mpegurl') ? 'application/vnd.apple.mpegurl' : 'application/octet-stream')
+    res.set('Access-Control-Allow-Origin', '*')
+    res.set('Cache-Control', 'no-cache')
+    res.send(rewritten)
+  } catch (err) {
+    console.error('HLS proxy error:', err.message)
+    res.status(502).send('proxy fetch failed')
+  }
+})
+
+app.get('/api/flv-proxy', async (req, res) => {
+  const targetUrl = req.query.url
+  if (!targetUrl) {
+    return res.status(400).send('missing url param')
+  }
+  try {
+    const resp = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': new URL(targetUrl).origin + '/',
+        'Range': req.headers.range || ''
+      }
+    })
+    if (!resp.ok) {
+      return res.status(resp.status).send('upstream error: ' + resp.status)
+    }
+    res.set('Content-Type', 'video/x-flv')
+    res.set('Access-Control-Allow-Origin', '*')
+    res.set('Cache-Control', 'no-cache')
+    res.set('Transfer-Encoding', 'chunked')
+    if (resp.body && resp.body.pipe) {
+      resp.body.pipe(res)
+    } else {
+      const buffer = Buffer.from(await resp.arrayBuffer())
+      res.send(buffer)
+    }
+  } catch (err) {
+    console.error('FLV proxy error:', err.message)
+    res.status(502).send('proxy fetch failed')
+  }
+})
+
+app.get('/api/segment-proxy', async (req, res) => {
+  const targetUrl = req.query.url
+  if (!targetUrl) {
+    return res.status(400).send('missing url param')
+  }
+  try {
+    const resp = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': new URL(targetUrl).origin + '/'
+      }
+    })
+    if (!resp.ok) {
+      return res.status(resp.status).send('upstream error')
+    }
+    const contentType = resp.headers.get('content-type') || 'video/mp2t'
+    res.set('Content-Type', contentType)
+    res.set('Access-Control-Allow-Origin', '*')
+    res.set('Cache-Control', 'public, max-age=10')
+    const buffer = Buffer.from(await resp.arrayBuffer())
+    res.send(buffer)
+  } catch (err) {
+    console.error('Segment proxy error:', err.message)
+    res.status(502).send('proxy fetch failed')
+  }
+})
+
 app.get('/api/realtime-share/config', (req, res) => {
   const config = getLiveKitConfig()
   res.json({
