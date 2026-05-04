@@ -1317,6 +1317,10 @@ app.post('/api/resolve-livestream', async (req, res) => {
       return res.status(400).json({ ok: false, error: '不支持的平台: ' + effectivePlatform })
     }
 
+    // 将 http:// 转为 https://（HTTPS 页面不能加载 HTTP 混合内容）
+    if (streamUrls.hls) streamUrls.hls = streamUrls.hls.replace(/^http:\/\//, 'https://')
+    if (streamUrls.flv) streamUrls.flv = streamUrls.flv.replace(/^http:\/\//, 'https://')
+
     // 优先 HLS，其次 FLV
     const streamUrl = streamUrls.hls || streamUrls.flv
     const protocol = streamUrls.hls ? 'hls' : 'flv'
