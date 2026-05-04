@@ -1175,12 +1175,12 @@ app.post('/api/resolve-livestream', async (req, res) => {
           .replace(/&amp;/g, '&')
           .replace(/\\u0026/g, '&')
           .replace(/\\u003d/g, '=')
-          .replace(/\\//g, '/')
 
         // 提取HLS流URL，优先选择高清(hd)画质
         const hlsPriority = ['Stage0T000hd', 'Stage0T000sd', 'Stage0T000ld', 'or4', '_sd', '_ld', '_hd']
         for (const quality of hlsPriority) {
-          const hlsMatch = decoded.match(new RegExp('(https?://pull-hls[^\\s"<>\\\\]+?' + quality + '\\\\.m3u8[^\\s"<>\\\\]*)'))
+          const pattern = '(https?://pull-hls[^\\s"<>]+' + quality + '\\.m3u8[^\\s"<>]*)'
+          const hlsMatch = decoded.match(new RegExp(pattern))
           if (hlsMatch) {
             streamUrls.hls = hlsMatch[1]
             break
@@ -1188,20 +1188,21 @@ app.post('/api/resolve-livestream', async (req, res) => {
         }
         // 如果没有匹配到特定画质，取任意m3u8
         if (!streamUrls.hls) {
-          const anyHls = decoded.match(/(https?:\/\/pull-hls[^\s"<>\\]+?\.m3u8[^\s"<>\\]*)/)
+          const anyHls = decoded.match(/(https?:\/\/pull-hls[^\s"<>]+?\.m3u8[^\s"<>]*)/)
           if (anyHls) streamUrls.hls = anyHls[1]
         }
 
         // 提取FLV流URL，优先选择高清画质
         for (const quality of hlsPriority) {
-          const flvMatch = decoded.match(new RegExp('(https?://pull-flv[^\\s"<>\\\\]+?' + quality + '\\\\.flv[^\\s"<>\\\\]*)'))
+          const pattern = '(https?://pull-flv[^\\s"<>]+' + quality + '\\.flv[^\\s"<>]*)'
+          const flvMatch = decoded.match(new RegExp(pattern))
           if (flvMatch) {
             streamUrls.flv = flvMatch[1]
             break
           }
         }
         if (!streamUrls.flv) {
-          const anyFlv = decoded.match(/(https?:\/\/pull-flv[^\s"<>\\]+?\.flv[^\s"<>\\]*)/)
+          const anyFlv = decoded.match(/(https?:\/\/pull-flv[^\s"<>]+?\.flv[^\s"<>]*)/)
           if (anyFlv) streamUrls.flv = anyFlv[1]
         }
 
