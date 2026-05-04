@@ -1044,7 +1044,13 @@ app.post('/api/resolve-livestream', async (req, res) => {
 
   try {
     let streamUrl = null
-    if (platform === 'douyin') {
+    const effectivePlatform = platform === 'auto'
+      ? (url.includes('douyin.com') ? 'douyin' : url.includes('bilibili.com') ? 'bilibili' : null)
+      : platform
+    if (!effectivePlatform) {
+      return res.status(400).json({ ok: false, error: '无法自动识别直播平台，请手动选择' })
+    }
+    if (effectivePlatform === 'douyin') {
       const match = url.match(/live\.douyin\.com\/(\d+)/)
       if (!match) {
         return res.status(400).json({ ok: false, error: '无法识别抖音直播间ID' })
@@ -1068,7 +1074,7 @@ app.post('/api/resolve-livestream', async (req, res) => {
       if (!streamUrl) {
         return res.status(502).json({ ok: false, error: '抖音直播解析失败，请确认直播间是否在直播中' })
       }
-    } else if (platform === 'bilibili') {
+    } else if (effectivePlatform === 'bilibili') {
       const match = url.match(/live\.bilibili\.com\/(\d+)/)
       if (!match) {
         return res.status(400).json({ ok: false, error: '无法识别B站直播间ID' })
@@ -1088,7 +1094,7 @@ app.post('/api/resolve-livestream', async (req, res) => {
         return res.status(502).json({ ok: false, error: 'B站直播解析失败，请确认直播间是否在直播中' })
       }
     } else {
-      return res.status(400).json({ ok: false, error: '不支持的平台: ' + platform })
+      return res.status(400).json({ ok: false, error: '不支持的平台: ' + effectivePlatform })
     }
     res.json({ ok: true, streamUrl })
   } catch (err) {
