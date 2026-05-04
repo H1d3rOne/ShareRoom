@@ -1163,22 +1163,25 @@ app.post('/api/resolve-livestream', async (req, res) => {
       if (roomMatch) {
         roomId = roomMatch[1]
       } else {
-        // 尝试从 live.douyin.com/xxx 提取
-        const liveMatch = url.match(/live\.douyin\.com\/(\d+)/)
-        if (liveMatch) {
-          roomId = liveMatch[1]
-        } else {
-          // 尝试通过短链接重定向获取
-          try {
-            const headResp = await fetch(url, {
-              method: 'HEAD',
-              headers: { 'User-Agent': mobileUA },
-              redirect: 'follow'
-            })
-            const finalUrl = headResp.url || url
-            const ridMatch = finalUrl.match(/(\d{19})/)
-            if (ridMatch) roomId = ridMatch[1]
-          } catch {}
+        // live.douyin.com/{web_rid} 需要通过重定向获取真实19位room_id
+        try {
+          const resp = await fetch(url, {
+            headers: { 'User-Agent': mobileUA },
+            redirect: 'follow'
+          })
+          // 重定向后的URL格式: https://webcast.amemv.com/douyin/webcast/reflow/{19位room_id}?...
+          const finalUrl = resp.url || ''
+          const ridMatch = finalUrl.match(/reflow\/(\d{19})/)
+          if (ridMatch) {
+            roomId = ridMatch[1]
+          } else {
+            // 尝试从页面内容提取 room_id
+            const text = await resp.text()
+            const textMatch = text.match(/"room_id"\s*:\s*(\d{19})/)
+            if (textMatch) roomId = textMatch[1]
+          }
+        } catch (e) {
+          console.error('抖音重定向解析失败:', e.message)
         }
       }
       if (!roomId) {
@@ -1203,7 +1206,6 @@ app.post('/api/resolve-livestream', async (req, res) => {
         if (streamUrl) {
           if (streamUrl.hls_pull_url) streamUrls.hls = streamUrl.hls_pull_url
           if (streamUrl.rtmp_pull_url) streamUrls.flv = streamUrl.rtmp_pull_url
-          // 也尝试 flv_pull_url
           if (streamUrl.flv_pull_url) streamUrls.flv = streamUrl.flv_pull_url
         }
       } catch (e) {
