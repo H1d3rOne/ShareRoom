@@ -3579,6 +3579,7 @@ function removeLocalTrack(kind) {
   updateLocalMediaFlags()
   syncMemberVideo(selfId.value)
   manageLocalAudioMonitor()
+  refreshLocalTracksForPeers()
 }
 
 function ensurePeerSenderCache(store, peerId) {
