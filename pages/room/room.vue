@@ -7652,6 +7652,7 @@ onUnmounted(() => {
 .live-badge {
   display: inline-flex;
   align-items: center;
+  justify-self: start;
   gap: 4px;
   font-size: 11px;
   font-weight: 700;
