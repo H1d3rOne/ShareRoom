@@ -825,8 +825,11 @@
                       <path d="M19.07 4.93a10 10 0 010 14.14"/>
                     </svg>
                   </button>
+                  <template v-if="activeShare.kind === 'livestream'">
+                    <span class="live-badge" :class="{ paused: !sharedVideoUi.playing }">LIVE</span>
+                  </template>
                   <input
-                    v-if="activeShare.kind !== 'livestream'"
+                    v-else
                     class="progress-slider"
                     type="range"
                     min="0"
@@ -837,27 +840,8 @@
                     @input="handleSharedVideoProgressInput"
                     @change="handleSharedVideoProgressInput"
                   />
-                  <template v-else>
-                    <input
-                      class="progress-slider livestream-progress"
-                      type="range"
-                      min="0"
-                      :max="Math.max(livestreamSeekableDuration, 0.1)"
-                      :step="0.1"
-                      :value="Math.max(0, Math.min(livestreamSeekableOffset, livestreamSeekableDuration))"
-                      :disabled="!canLocalControlSharedVideo"
-                      @input="handleLivestreamSeek"
-                      @change="handleLivestreamSeek"
-                    />
-                    <span class="live-badge" :class="{ paused: !sharedVideoUi.playing }">LIVE</span>
-                  </template>
-                  <span class="time-label">
-                    <template v-if="activeShare.kind === 'livestream'">
-                      {{ formatDuration(sharedVideoUi.currentTime) }}
-                    </template>
-                    <template v-else>
-                      {{ formatDuration(sharedVideoUi.currentTime) }} / {{ formatDuration(sharedVideoUi.duration) }}
-                    </template>
+                  <span v-if="activeShare.kind !== 'livestream'" class="time-label">
+                    {{ formatDuration(sharedVideoUi.currentTime) }} / {{ formatDuration(sharedVideoUi.duration) }}
                   </span>
                   <button
                     class="control-pill fullscreen-btn"
@@ -1239,29 +1223,7 @@ const livestreamResolving = ref(false)
 const livestreamManualPause = ref(false)
 const livestreamReady = ref(false)
 const livestreamError = ref('')
-const livestreamSeekableDuration = computed(() => {
-  if (activeShare.value?.kind !== 'livestream' || !sharedVideoRef.value) return 0
-  const video = sharedVideoRef.value
-  if (video.seekable && video.seekable.length > 0) {
-    const start = video.seekable.start(0)
-    const end = video.seekable.end(video.seekable.length - 1)
-    if (Number.isFinite(end) && Number.isFinite(start) && end > start) {
-      return end - start
-    }
-  }
-  // fallback: 用最近60秒作为回看窗口
-  return 60
-})
-const livestreamSeekableOffset = computed(() => {
-  if (activeShare.value?.kind !== 'livestream' || !sharedVideoRef.value) return 0
-  const video = sharedVideoRef.value
-  if (video.seekable && video.seekable.length > 0) {
-    const start = video.seekable.start(0)
-    const offset = video.currentTime - start
-    return Number.isFinite(offset) ? Math.max(0, offset) : 0
-  }
-  return 0
-})
+
 const currentLivestreamUrl = ref('')
 const lastRemotePointerSentAt = ref(0)
 const sharedOutgoingStream = ref(null)
@@ -2415,12 +2377,8 @@ function restartSharedVideoUiTicker() {
     if (!shouldUseSyncedVideoUi() && activeShare.value?.kind !== 'livestream') {
       return
     }
-    // 直播流：只更新本地时间UI
     if (activeShare.value?.kind === 'livestream') {
-      if (sharedVideoRef.value) {
-        sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
-        sharedVideoUi.playing = Boolean(!sharedVideoRef.value.paused && !sharedVideoRef.value.ended)
-      }
+      // 直播流不需要 ticker 更新 UI
       return
     }
     if (!shouldUseSyncedVideoUi() || !activeShare.value?.sync) {
@@ -6304,8 +6262,7 @@ function emitShareControl(action, extra = {}) {
     syncSharedVideoUiFromState(activeShare.value.sync)
   } else if (activeShare.value.kind === 'livestream') {
     const video = sharedVideoRef.value
-    payload.currentTime = extra.currentTime ?? 0
-    payload.playing = extra.playing ?? Boolean(video && !video.paused && !video.ended)
+    payload.playing = extra.playing ?? Boolean(video && !video.paused)
     payload.duration = 0
     payload.muted = extra.muted ?? sharedVideoMuted.value
 
@@ -6313,7 +6270,6 @@ function emitShareControl(action, extra = {}) {
       controllerId: selfId.value,
       sync: {
         action,
-        currentTime: payload.currentTime,
         playing: payload.playing,
         duration: 0,
         muted: payload.muted,
@@ -6321,7 +6277,6 @@ function emitShareControl(action, extra = {}) {
         controllerId: selfId.value
       }
     })
-    syncSharedVideoUiFromState(activeShare.value.sync)
   }
 
   if (typeof extra.zoomed === 'boolean') {
@@ -6352,28 +6307,29 @@ function applyVideoSync(sync, forceSeek = false) {
     return
   }
 
-  // 直播流：只同步播放/暂停状态，不同步时间位置
+  // 直播流：极简同步——只管播放/暂停 + 声音，不管时间/进度
   if (activeShare.value?.kind === 'livestream') {
-    // 非管理员本地暂停时不强制恢复播放
     if (!canGlobalControlShare.value && sharedVideoLocalPaused.value) {
-      if (sync.playing) {
-        // 记住全局正在播放，但本地暂停
-        sharedVideoUi.playing = false
-      }
+      // 非管理员本地暂停：记住全局状态但不恢复
+      sharedVideoUi.playing = false
       return
     }
-    
     if (sync.playing) {
       livestreamManualPause.value = false
       sharedVideoUi.playing = true
       if (video.paused) {
+        suppressShareEvents(1000)
         playSharedVideoSafely({ source: '直播同步播放' })
       }
     } else {
       livestreamManualPause.value = true
       sharedVideoUi.playing = false
-      cancelSharedVideoPlayRequest()
       video.pause()
+    }
+    if (typeof sync.muted === 'boolean') {
+      sharedVideoMuted.value = sync.muted
+      video.muted = sync.muted
+      sharedVideoUi.muted = sync.muted
     }
     return
   }
@@ -6554,32 +6510,27 @@ function handleSharedVideoPlay() {
 
 function handleSharedVideoPause() {
   if (activeShare.value?.kind === 'livestream') {
-    // 直播流暂停：区分"用户主动暂停"和"缓冲自动暂停"
-    // livestreamManualPause 只在用户点击暂停按钮时设为 true
+    // 直播流暂停：只有手动暂停才标记，缓冲暂停自动恢复
     if (livestreamManualPause.value) {
-      // 用户主动暂停，更新UI并同步
       sharedVideoUi.playing = false
       if (canGlobalControlShare.value && !shouldSuppressShareEvents()) {
-        emitShareControl('pause', {
-          playing: false,
-          currentTime: sharedVideoRef.value?.currentTime || 0,
-          duration: 0
-        })
+        emitShareControl('pause', { playing: false })
       }
       return
     }
-    // 非用户暂停（缓冲/网络抖动/初始化），自动恢复播放
-    // 不发送任何同步信号，不更新UI的playing状态
-    if (activeShare.value.sync?.playing !== false && !sharedVideoLocalPaused.value) {
-      // 延迟恢复，避免快速 play/pause 循环
-      suppressShareEvents(800)
-      setTimeout(() => {
-        if (activeShare.value?.kind === 'livestream' && !livestreamManualPause.value && sharedVideoRef.value?.paused && !sharedVideoLocalPaused.value) {
-          suppressShareEvents(800)
-          playSharedVideoSafely({ source: '直播缓冲自动恢复' })
-        }
-      }, 300)
-    }
+    // 缓冲/网络抖动/初始化 → 延迟自动恢复，不发信号
+    suppressShareEvents(1000)
+    setTimeout(() => {
+      if (
+        activeShare.value?.kind === 'livestream'
+        && !livestreamManualPause.value
+        && sharedVideoRef.value?.paused
+        && !sharedVideoLocalPaused.value
+      ) {
+        suppressShareEvents(1000)
+        playSharedVideoSafely({ source: '直播缓冲自动恢复' })
+      }
+    }, 500)
     return
   }
   if (shouldSuppressShareEvents() || (activeShare.value?.kind !== 'video' && activeShare.value?.kind !== 'livestream') || !canGlobalControlShare.value) {
@@ -6620,9 +6571,9 @@ function handleSharedVideoTimeUpdate() {
     sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
     const rawDuration = Number(sharedVideoRef.value.duration || 0)
     if (activeShare.value?.kind === 'livestream') {
-      // 直播流不使用 duration，进度条由 seekable range 控制
-      sharedVideoUi.duration = 0
-      sharedVideoUi.currentTime = Number(sharedVideoRef.value.currentTime || 0)
+      // 直播流不需要更新 duration/currentTime
+      sharedVideoUi.playing = Boolean(!sharedVideoRef.value.paused)
+      return
     } else if (!Number.isFinite(rawDuration) || rawDuration <= 0) {
       sharedVideoUi.duration = Math.max(sharedVideoUi.currentTime, Number(activeShare.value?.sync?.duration || 0))
     } else {
@@ -6653,130 +6604,108 @@ function handleSharedVideoTimeUpdate() {
 }
 
 function toggleSharedVideoPlayback() {
-  if (!canLocalControlSharedVideo.value || (activeShare.value?.kind !== 'video' && activeShare.value?.kind !== 'livestream') || !sharedVideoRef.value) {
+  if (!canLocalControlSharedVideo.value || !sharedVideoRef.value) return
+
+  const video = sharedVideoRef.value
+
+  // ===== 直播流：极简播放/暂停 =====
+  if (activeShare.value?.kind === 'livestream') {
+    if (video.paused) {
+      // 播放
+      sharedVideoLocalPaused.value = false
+      livestreamManualPause.value = false
+      sharedVideoUi.playing = true
+      suppressShareEvents(1000)
+      playSharedVideoSafely({ source: '直播播放' })
+      if (canGlobalControlShare.value) {
+        emitShareControl('play', { playing: true })
+      }
+    } else {
+      // 暂停
+      sharedVideoLocalPaused.value = true
+      livestreamManualPause.value = true
+      sharedVideoUi.playing = false
+      suppressShareEvents(1000)
+      cancelSharedVideoPlayRequest()
+      video.pause()
+      if (canGlobalControlShare.value) {
+        emitShareControl('pause', { playing: false })
+      }
+    }
     return
   }
 
-  if (canGlobalControlShare.value) {
-    sharedVideoLocalPaused.value = false
-    if (shouldUseSyncedVideoUi()) {
-      const nextPlaying = !sharedVideoUi.playing
-      sharedVideoUi.playing = nextPlaying
-      suppressShareEvents(500)
-      if (nextPlaying) {
-        playSharedVideoSafely({ source: '实时流本地播放' })
-      } else {
-        cancelSharedVideoPlayRequest()
-        sharedVideoRef.value.pause()
-      }
-      emitShareControl(nextPlaying ? 'play' : 'pause', {
-        playing: nextPlaying,
-        currentTime: sharedVideoUi.currentTime,
-        duration: sharedVideoUi.duration
-      })
-      return
+  // ===== 普通视频：原有逻辑 =====
+  if (!canGlobalControlShare.value && !shouldUseSyncedVideoUi()) {
+    // 非管理员本地控制
+    if (video.paused) {
+      if (activeShare.value?.sync && !activeShare.value.sync.playing) return
+      sharedVideoLocalPaused.value = false
+      const syncedTime = getVideoSyncTime(activeShare.value.sync)
+      try {
+        video.currentTime = Math.min(syncedTime, video.duration || syncedTime)
+        sharedVideoUi.currentTime = syncedTime
+        sharedVideoUi.playing = true
+      } catch (e) { console.error('恢复本地视频进度失败:', e) }
+      playSharedVideoSafely({ source: '本地恢复视频播放' })
+    } else {
+      sharedVideoLocalPaused.value = true
+      sharedVideoUi.playing = false
+      cancelSharedVideoPlayRequest()
+      video.pause()
     }
+    return
+  }
 
-    if (sharedVideoRef.value.paused) {
-      // 视频播放完毕后重新播放，先 seek 到开头再同步给其他成员
-      if (sharedVideoRef.value.ended && activeShare.value?.kind !== 'livestream') {
-        try {
-          sharedVideoRef.value.currentTime = 0
-        } catch (error) {
-          console.error('重置播放位置失败:', error)
-        }
-        // 清除旧的 captureStream，让 handleSharedVideoPlaying 重新捕获
-        if (sharedOutgoingStream.value) {
-          sharedOutgoingStream.value = null
-          updateActiveShare({ streamId: null })
-        }
-      }
-      // 直播流恢复播放时跳到最新位置
-      if (activeShare.value?.kind === 'livestream' && sharedVideoRef.value.seekable && sharedVideoRef.value.seekable.length > 0) {
-        const end = sharedVideoRef.value.seekable.end(sharedVideoRef.value.seekable.length - 1)
-        if (Number.isFinite(end)) {
-          try {
-            sharedVideoRef.value.currentTime = end
-          } catch (e) {
-            console.error('直播跳转到最新位置失败:', e)
-          }
-        }
-      }
-      if (activeShare.value?.kind === 'livestream') {
-        livestreamManualPause.value = false
-      }
-      suppressShareEvents(500)
-      sharedVideoUi.playing = true
-      playSharedVideoSafely({ source: '视频播放' })
-      emitShareControl('play', {
-        playing: true,
-        currentTime: sharedVideoRef.value.currentTime || 0,
-        duration: Number(sharedVideoRef.value?.duration || activeShare.value?.sync?.duration || 0),
-        muted: sharedVideoMuted.value
-      })
-      return
-    }
-
-    if (activeShare.value?.kind === 'livestream') {
-      livestreamManualPause.value = true
-    }
+  // 管理员控制
+  sharedVideoLocalPaused.value = false
+  if (shouldUseSyncedVideoUi()) {
+    const nextPlaying = !sharedVideoUi.playing
+    sharedVideoUi.playing = nextPlaying
     suppressShareEvents(500)
-    sharedVideoUi.playing = false
-    cancelSharedVideoPlayRequest()
-    sharedVideoRef.value.pause()
-    emitShareControl('pause', {
-      playing: false,
-      currentTime: sharedVideoRef.value.currentTime || 0,
-      duration: Number(sharedVideoRef.value?.duration || activeShare.value?.sync?.duration || 0),
-      muted: sharedVideoMuted.value
+    if (nextPlaying) {
+      playSharedVideoSafely({ source: '实时流本地播放' })
+    } else {
+      cancelSharedVideoPlayRequest()
+      video.pause()
+    }
+    emitShareControl(nextPlaying ? 'play' : 'pause', {
+      playing: nextPlaying,
+      currentTime: sharedVideoUi.currentTime,
+      duration: sharedVideoUi.duration
     })
     return
   }
 
-  // 非管理员的本地控制
-  if (sharedVideoRef.value.paused) {
-    // 全局暂停时非管理员不能本地恢复播放
-    if (activeShare.value?.sync && !activeShare.value.sync.playing) {
-      return
-    }
-    sharedVideoLocalPaused.value = false
-    if (activeShare.value?.kind === 'livestream') {
-      // 直播流恢复播放时跳到最新位置
-      if (sharedVideoRef.value.seekable && sharedVideoRef.value.seekable.length > 0) {
-        const end = sharedVideoRef.value.seekable.end(sharedVideoRef.value.seekable.length - 1)
-        if (Number.isFinite(end)) {
-          try {
-            sharedVideoRef.value.currentTime = end
-          } catch (error) {
-            console.error('直播跳转到最新位置失败:', error)
-          }
-        }
-      }
-      sharedVideoUi.playing = true
-    } else {
-      const syncedTime = getVideoSyncTime(activeShare.value.sync)
-      try {
-        sharedVideoRef.value.currentTime = Math.min(syncedTime, sharedVideoRef.value.duration || syncedTime)
-        sharedVideoUi.currentTime = syncedTime
-        sharedVideoUi.playing = true
-      } catch (error) {
-        console.error('恢复本地视频进度失败:', error)
+  if (video.paused) {
+    if (video.ended) {
+      try { video.currentTime = 0 } catch {}
+      if (sharedOutgoingStream.value) {
+        sharedOutgoingStream.value = null
+        updateActiveShare({ streamId: null })
       }
     }
-    if (activeShare.value?.kind === 'livestream') {
-      livestreamManualPause.value = false
-    }
-    playSharedVideoSafely({ source: '本地恢复视频播放' })
-    return
+    suppressShareEvents(500)
+    sharedVideoUi.playing = true
+    playSharedVideoSafely({ source: '视频播放' })
+    emitShareControl('play', {
+      playing: true,
+      currentTime: video.currentTime || 0,
+      duration: Number(video.duration || activeShare.value?.sync?.duration || 0),
+      muted: sharedVideoMuted.value
+    })
+  } else {
+    suppressShareEvents(500)
+    sharedVideoUi.playing = false
+    cancelSharedVideoPlayRequest()
+    video.pause()
+    emitShareControl('pause', {
+      playing: false,
+      currentTime: video.currentTime || 0,
+      duration: Number(video.duration || activeShare.value?.sync?.duration || 0),
+      muted: sharedVideoMuted.value
+    })
   }
-
-  if (activeShare.value?.kind === 'livestream') {
-    livestreamManualPause.value = true
-  }
-  sharedVideoLocalPaused.value = true
-  sharedVideoUi.playing = false
-  cancelSharedVideoPlayRequest()
-  sharedVideoRef.value.pause()
 }
 
 function handleSharedVideoProgressInput(event) {
@@ -6787,15 +6716,6 @@ function handleSharedVideoProgressInput(event) {
   let nextTime = Number(event.target.value)
   if (!Number.isFinite(nextTime)) {
     return
-  }
-
-  // 直播模式下进度条只能回退，不能超过当前播放进度
-  if (activeShare.value?.kind === 'livestream') {
-    const currentLiveTime = sharedVideoRef.value.currentTime || 0
-    if (nextTime > currentLiveTime) {
-      nextTime = currentLiveTime
-      event.target.value = nextTime
-    }
   }
 
   if (shouldUseSyncedVideoUi()) {
@@ -6822,29 +6742,6 @@ function handleSharedVideoProgressInput(event) {
     console.error('设置播放进度失败:', error)
   }
 }
-
-
-function handleLivestreamSeek(event) {
-  if (!canLocalControlSharedVideo.value || activeShare.value?.kind !== 'livestream' || !sharedVideoRef.value) {
-    return
-  }
-  const video = sharedVideoRef.value
-  let nextTime = Number(event.target.value)
-  if (!Number.isFinite(nextTime)) return
-
-  // 直播回看：seek 到 seekable 范围内的位置
-  if (video.seekable && video.seekable.length > 0) {
-    const start = video.seekable.start(0)
-    const targetTime = start + nextTime
-    const end = video.seekable.end(video.seekable.length - 1)
-    try {
-      video.currentTime = Math.min(targetTime, end)
-    } catch (e) {
-      console.error('直播回看 seek 失败:', e)
-    }
-  }
-}
-
 function toggleSharedImageZoom() {
   if (!activeShare.value || activeShare.value.kind !== 'image' || shouldSuppressShareEvents() || !canManageSharedMedia.value) {
     return
@@ -7763,6 +7660,7 @@ onUnmounted(() => {
   padding: 2px 6px;
   border-radius: 3px;
   background: rgba(255, 68, 68, 0.12);
+  white-space: nowrap;
 }
 .live-badge::before {
   content: '';
@@ -7783,9 +7681,6 @@ onUnmounted(() => {
 @keyframes live-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
-}
-.livestream-progress {
-  /* 直播回看进度条样式 */
 }
 
 .share-actions {
