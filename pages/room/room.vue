@@ -7931,14 +7931,7 @@ onUnmounted(() => {
 .share-toolbar-actions > * {
   flex: 0 0 auto;
 }
-.share-toolbar-actions .primary-btn,
-.share-toolbar-actions .secondary-btn {
-  padding: 0 8px;
-  min-height: 34px;
-  font-size: 12px;
-  white-space: nowrap;
-  border-radius: 11px;
-}
+
 
 .share-toolbar-hint {
   color: var(--text-muted);
@@ -11235,4 +11228,36 @@ onUnmounted(() => {
 }
 
 
+
+/* share-toolbar 内按钮强制紧凑，覆盖全局按钮样式 */
+.share-toolbar-actions .primary-btn,
+.share-toolbar-actions .secondary-btn {
+  padding: 0 8px;
+  min-height: 34px;
+  height: 34px;
+  font-size: 12px;
+  border-radius: 11px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+@media (max-width: 720px) {
+  .share-toolbar-actions .primary-btn,
+  .share-toolbar-actions .secondary-btn {
+    padding: 0 7px;
+    min-height: 32px;
+    height: 32px;
+    font-size: 11px;
+    border-radius: 10px;
+  }
+}
+@media (max-width: 480px) {
+  .share-toolbar-actions .primary-btn,
+  .share-toolbar-actions .secondary-btn {
+    padding: 0 6px;
+    min-height: 30px;
+    height: 30px;
+    font-size: 10px;
+    border-radius: 9px;
+  }
+}
 </style>
