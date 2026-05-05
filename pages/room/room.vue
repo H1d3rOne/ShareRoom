@@ -7922,8 +7922,13 @@ onUnmounted(() => {
 
 .share-toolbar-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.share-toolbar-actions > * {
+  flex: 0 0 auto;
 }
 
 .share-toolbar-hint {
@@ -10920,11 +10925,14 @@ onUnmounted(() => {
     width: 100%;
   }
 
-  .share-toolbar-actions > *,
   .share-actions > *,
   .game-home-actions > *,
   .landlord-actions > * {
     flex: 1 1 160px;
+  }
+
+  .share-toolbar-actions > * {
+    flex: 0 0 auto;
   }
 
   .primary-btn,
@@ -11063,9 +11071,12 @@ onUnmounted(() => {
     border-radius: 18px;
   }
 
-  .share-toolbar-actions > *,
   .share-actions > * {
     flex-basis: 100%;
+  }
+
+  .share-toolbar-actions > * {
+    flex: 0 0 auto;
   }
 
   .share-footer {
