@@ -7922,8 +7922,21 @@ onUnmounted(() => {
 
 .share-toolbar-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.share-toolbar-actions::-webkit-scrollbar { display: none; }
+.share-toolbar-actions > * {
+  flex: 0 0 auto;
+}
+.share-toolbar-actions .primary-btn,
+.share-toolbar-actions .secondary-btn {
+  padding: 0 10px;
+  min-height: 36px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .share-toolbar-hint {
@@ -11068,7 +11081,10 @@ onUnmounted(() => {
     border-radius: 18px;
   }
 
-  .share-toolbar-actions > *,
+  .share-toolbar-actions > * {
+    flex: 0 0 auto;
+  }
+
   .share-actions > * {
     flex-basis: 100%;
   }
