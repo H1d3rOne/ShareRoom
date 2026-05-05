@@ -7923,12 +7923,18 @@ onUnmounted(() => {
 .share-toolbar-actions {
   display: flex;
   flex-wrap: nowrap;
-  gap: 10px;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  align-items: center;
+  gap: 8px;
+  overflow: visible;
 }
 .share-toolbar-actions > * {
   flex: 0 0 auto;
+  white-space: nowrap;
+}
+.share-toolbar-actions .primary-btn,
+.share-toolbar-actions .secondary-btn {
+  min-height: 38px;
+  padding: 0 12px;
 }
 
 .share-toolbar-hint {
@@ -10913,12 +10919,14 @@ onUnmounted(() => {
   }
 
   .share-toolbar,
-  .share-toolbar-actions,
   .share-actions {
     align-items: stretch;
   }
 
-  .share-toolbar-actions,
+  .share-toolbar-actions {
+    align-items: center;
+  }
+
   .share-actions,
   .game-home-actions,
   .landlord-actions {
