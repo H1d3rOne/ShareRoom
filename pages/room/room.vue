@@ -6302,6 +6302,26 @@ function emitShareControl(action, extra = {}) {
       }
     })
     syncSharedVideoUiFromState(activeShare.value.sync)
+  } else if (activeShare.value.kind === 'livestream') {
+    const video = sharedVideoRef.value
+    payload.currentTime = extra.currentTime ?? 0
+    payload.playing = extra.playing ?? Boolean(video && !video.paused && !video.ended)
+    payload.duration = 0
+    payload.muted = extra.muted ?? sharedVideoMuted.value
+
+    updateActiveShare({
+      controllerId: selfId.value,
+      sync: {
+        action,
+        currentTime: payload.currentTime,
+        playing: payload.playing,
+        duration: 0,
+        muted: payload.muted,
+        updatedAt: Date.now(),
+        controllerId: selfId.value
+      }
+    })
+    syncSharedVideoUiFromState(activeShare.value.sync)
   }
 
   if (typeof extra.zoomed === 'boolean') {
@@ -6552,8 +6572,10 @@ function handleSharedVideoPause() {
     // 不发送任何同步信号，不更新UI的playing状态
     if (activeShare.value.sync?.playing !== false && !sharedVideoLocalPaused.value) {
       // 延迟恢复，避免快速 play/pause 循环
+      suppressShareEvents(800)
       setTimeout(() => {
         if (activeShare.value?.kind === 'livestream' && !livestreamManualPause.value && sharedVideoRef.value?.paused && !sharedVideoLocalPaused.value) {
+          suppressShareEvents(800)
           playSharedVideoSafely({ source: '直播缓冲自动恢复' })
         }
       }, 300)
@@ -6870,7 +6892,10 @@ async function toggleAudio() {
 function toggleSpeaker() {
   isSpeakerOn.value = !isSpeakerOn.value
   syncRemoteAudioPlayback()
-  nextTick(syncSharedVideoElementSource)
+  // 直播流不需要重新初始化播放器
+  if (activeShare.value?.kind !== 'livestream') {
+    nextTick(syncSharedVideoElementSource)
+  }
 }
 
 async function toggleVideo() {
