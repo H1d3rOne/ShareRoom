@@ -7910,36 +7910,46 @@ onUnmounted(() => {
 
 .share-toolbar {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 12px 14px;
   border-radius: 22px;
   border: 1px solid rgba(167, 185, 210, 0.1);
   background: rgba(255, 255, 255, 0.04);
 }
 
 .share-toolbar-actions {
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
-  overflow: visible;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 .share-toolbar-actions > * {
-  flex: 0 0 auto;
+  min-width: 0;
+  width: 100%;
   white-space: nowrap;
 }
 .share-toolbar-actions .primary-btn,
 .share-toolbar-actions .secondary-btn {
-  min-height: 38px;
-  padding: 0 12px;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 6px;
+  border-radius: 11px;
+  font-size: 12px;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .share-toolbar-hint {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .share-content-frame {
@@ -11214,4 +11224,47 @@ onUnmounted(() => {
   padding: 16px 24px 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
+
+/* 共享区底部按钮：始终紧凑单行，不继承移动端大按钮/堆叠规则 */
+.share-toolbar .share-toolbar-actions {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+.share-toolbar .share-toolbar-actions > * {
+  flex: initial !important;
+  flex-basis: auto !important;
+  width: 100%;
+  min-width: 0;
+}
+.share-toolbar .share-toolbar-actions .primary-btn,
+.share-toolbar .share-toolbar-actions .secondary-btn {
+  min-height: 36px !important;
+  height: 36px;
+  padding: 0 6px;
+  border-radius: 11px;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 480px) {
+  .share-toolbar .share-toolbar-actions {
+    gap: 4px;
+  }
+  .share-toolbar .share-toolbar-actions .primary-btn,
+  .share-toolbar .share-toolbar-actions .secondary-btn {
+    min-height: 34px !important;
+    height: 34px;
+    padding: 0 4px;
+    font-size: 11px;
+    border-radius: 10px;
+  }
+}
+
 </style>
