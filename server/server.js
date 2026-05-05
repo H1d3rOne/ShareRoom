@@ -2189,7 +2189,11 @@ io.on('connection', (socket) => {
         ? 'screen'
         : payload.media.kind === 'livestream'
           ? 'livestream'
-          : 'video'
+          : payload.media.kind === 'audio'
+            ? 'audio'
+            : payload.media.kind === 'file'
+              ? 'file'
+              : 'video'
     const sharedMedia = {
       id: payload.media.id,
       kind,
@@ -2209,7 +2213,7 @@ io.on('connection', (socket) => {
       ownerName: session.userName,
       zoomed: false,
       pointer: null,
-      sync: (kind === 'video' || kind === 'livestream')
+      sync: (kind === 'video' || kind === 'livestream' || kind === 'audio')
         ? {
             action: 'ready',
             playing: true,
@@ -2262,7 +2266,7 @@ io.on('connection', (socket) => {
     }
 
     let sync = room.sharedMedia.sync
-    if (room.sharedMedia.kind === 'video' || room.sharedMedia.kind === 'livestream') {
+    if (room.sharedMedia.kind === 'video' || room.sharedMedia.kind === 'livestream' || room.sharedMedia.kind === 'audio') {
       sync = {
         action: payload.action || 'heartbeat',
         playing: Boolean(payload.playing),
