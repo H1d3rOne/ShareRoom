@@ -7933,10 +7933,11 @@ onUnmounted(() => {
 }
 .share-toolbar-actions .primary-btn,
 .share-toolbar-actions .secondary-btn {
-  padding: 0 10px;
-  min-height: 36px;
+  padding: 0 8px;
+  min-height: 34px;
   font-size: 12px;
   white-space: nowrap;
+  border-radius: 11px;
 }
 
 .share-toolbar-hint {
@@ -10927,6 +10928,14 @@ onUnmounted(() => {
 
   .share-toolbar-actions {
     align-items: center;
+    gap: 6px;
+  }
+  .share-toolbar-actions .primary-btn,
+  .share-toolbar-actions .secondary-btn {
+    padding: 0 7px;
+    min-height: 32px;
+    font-size: 11px;
+    border-radius: 10px;
   }
 
   .share-actions,
@@ -11083,6 +11092,14 @@ onUnmounted(() => {
 
   .share-toolbar-actions > * {
     flex: 0 0 auto;
+  }
+
+  .share-toolbar-actions .primary-btn,
+  .share-toolbar-actions .secondary-btn {
+    padding: 0 6px;
+    min-height: 30px;
+    font-size: 10px;
+    border-radius: 9px;
   }
 
   .share-actions > * {
