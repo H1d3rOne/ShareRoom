@@ -648,6 +648,7 @@
 
           <template v-else-if="activeShare">
             <div class="share-content-frame">
+
               <img
                 v-if="activeShare.kind === 'image' && activeShare.url"
                 :src="activeShare.url"
@@ -676,21 +677,77 @@
                 @timeupdate="handleSharedVideoTimeUpdate"
               ></video>
 
-              <div v-else-if="activeShare.kind === 'audio'" class="audio-player-container">
-                <canvas ref="audioVisualizerCanvasRef" class="audio-visualizer-canvas" width="600" height="200"></canvas>
-                <div class="audio-player-info">
-                  <div class="audio-player-icon">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M9 18V5l12-2v13"/>
-                      <circle cx="6" cy="18" r="3"/>
-                      <circle cx="18" cy="16" r="3"/>
-                    </svg>
-                  </div>
-                  <div class="audio-player-meta">
-                    <div class="audio-player-title">{{ activeShare.fileName || '未知音乐' }}</div>
-                    <div class="audio-player-size">{{ formatFileSize(activeShare.fileSize) }}</div>
+              <div v-else-if="activeShare.kind === 'audio'" class="turntable-player" :class="{ 'beat-flash': audioBeatFlash }">
+                <div class="turntable-aurora" aria-hidden="true">
+                  <span class="aurora-blob aurora-blob-1"></span>
+                  <span class="aurora-blob aurora-blob-2"></span>
+                  <span class="aurora-blob aurora-blob-3"></span>
+                </div>
+
+                <div class="turntable-body">
+                  <div class="turntable-stage">
+                    <div class="turntable-platter">
+                      <div class="turntable-vinyl" :class="{ playing: audioPlaying }" aria-hidden="true">
+                        <span class="vinyl-groove" v-for="n in 8" :key="n"></span>
+                        <div class="vinyl-label">
+                          <span class="vinyl-label-icon">
+                            <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                          </span>
+                          <span class="vinyl-label-text">{{ activeShare.fileName || '未知音频' }}</span>
+                        </div>
+                      </div>
+                      <div class="turntable-tonearm" :class="{ playing: audioPlaying }" aria-hidden="true">
+                        <span class="tonearm-pivot"></span>
+                        <span class="tonearm-shaft"></span>
+                        <span class="tonearm-head"></span>
+                      </div>
+                    </div>
                   </div>
                 </div>
+
+                <div class="turntable-spectrum" aria-hidden="true">
+                  <canvas ref="audioSpectrumCanvasRef" class="spectrum-canvas"></canvas>
+                </div>
+
+                <div class="turntable-info">
+                  <div class="turntable-trackname">{{ activeShare.fileName || '未知音频' }}</div>
+                  <div class="turntable-metadata">{{ formatFileSize(activeShare.fileSize) }} &middot; {{ getAudioFormatLabel(activeShare.fileName) }}</div>
+                </div>
+
+                <div class="turntable-control-bar">
+                  <button class="control-pill playback-btn" :class="{ playing: audioPlaying }" :disabled="!canLocalControlSharedAudio || (!canGlobalControlShare && !audioLocalPaused && !audioPlaying)" :aria-label="audioPlaying ? '暂停' : '播放'" @click="toggleAudioPlayback">
+                    <svg v-if="!audioPlaying" class="control-icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <svg v-else class="control-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                  </button>
+
+                  <button class="control-pill volume-btn" :class="{ muted: audioMuted }" :aria-label="audioMuted ? '取消静音' : '静音'" @click="toggleAudioMute">
+                    <svg v-if="audioMuted" class="control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                    <svg v-else class="control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 010 7.07"/><path d="M19.07 4.93a10 10 0 010 14.14"/></svg>
+                  </button>
+
+                  <input
+                    class="progress-slider audio-progress-slider"
+                    type="range"
+                    min="0"
+                    :max="Math.max(audioDuration, 0)"
+                    :step="0.1"
+                    :value="Math.min(audioCurrentTime, audioDuration || 0)"
+                    :disabled="!canGlobalControlShare"
+                    @input="handleAudioProgressSliderInput"
+                    @change="handleAudioProgressSliderInput"
+                  />
+
+                  <span class="time-label">{{ formatDuration(audioCurrentTime) }} / {{ formatDuration(audioDuration) }}</span>
+
+                  <button v-if="canDownloadSharedFile()" class="control-pill download-btn" @click.stop="downloadSharedFile" title="下载">
+                    <svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  </button>
+
+                  <button class="control-pill fullscreen-btn" @click.stop="toggleSharedStageFullscreen" title="全屏">
+                    <svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                  </button>
+                </div>
+
                 <audio
                   ref="sharedAudioRef"
                   :src="activeShare.url"
@@ -703,40 +760,6 @@
                   @timeupdate="handleAudioTimeUpdate"
                   @ended="handleAudioEnded"
                 ></audio>
-                <div class="audio-player-controls">
-                  <button class="audio-ctrl-btn" :class="{ active: audioPlaying }" @click="toggleAudioPlayback">
-                    <svg v-if="!audioPlaying" viewBox="0 0 24 24" aria-hidden="true">
-                      <polygon points="5 3 19 12 5 21 5 3"/>
-                    </svg>
-                    <svg v-else viewBox="0 0 24 24" aria-hidden="true">
-                      <rect x="6" y="4" width="4" height="16"/>
-                      <rect x="14" y="4" width="4" height="16"/>
-                    </svg>
-                  </button>
-                  <input
-                    class="audio-progress-slider"
-                    type="range"
-                    min="0"
-                    :max="Math.max(audioDuration, 0)"
-                    :step="0.1"
-                    :value="audioCurrentTime"
-                    @input="handleAudioSeek"
-                    @change="handleAudioSeek"
-                  />
-                  <span class="audio-time-label">{{ formatDuration(audioCurrentTime) }} / {{ formatDuration(audioDuration) }}</span>
-                  <button class="audio-ctrl-btn" :class="{ muted: audioMuted }" @click="toggleAudioMute">
-                    <svg v-if="audioMuted" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M11 5L6 9H2v6h4l5 4V5z"/>
-                      <line x1="23" y1="9" x2="17" y2="15"/>
-                      <line x1="17" y1="9" x2="23" y2="15"/>
-                    </svg>
-                    <svg v-else viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M11 5L6 9H2v6h4l5 4V5z"/>
-                      <path d="M15.54 8.46a5 5 0 010 7.07"/>
-                      <path d="M19.07 4.93a10 10 0 010 14.14"/>
-                    </svg>
-                  </button>
-                </div>
               </div>
 
               <div v-else-if="activeShare.kind === 'file'" class="generic-file-display">
@@ -787,19 +810,6 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M20 11a8 8 0 1 0 2 5.3" />
                       <path d="M20 4v7h-7" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    class="webpage-nav-btn fullscreen"
-                    title="全屏"
-                    @click.stop="toggleSharedWebpageFullscreen"
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <polyline points="15 3 21 3 21 9"/>
-                      <polyline points="9 21 3 21 3 15"/>
-                      <line x1="21" y1="3" x2="14" y2="10"/>
-                      <line x1="3" y1="21" x2="10" y2="14"/>
                     </svg>
                   </button>
                 </div>
@@ -861,21 +871,14 @@
               <span class="remote-command-label">{{ remoteCommandOverlay.label }}</span>
             </div>
 
-            <div v-if="activeShare && (canShare || canDownloadSharedFile())" class="share-close-drawer">
+            <div v-if="activeShare && canShare" class="share-close-drawer">
               <button type="button" class="share-close-trigger" aria-label="展开共享操作面板" @click.stop>
                 &lt;
               </button>
-              <button v-if="canDownloadSharedFile()" type="button" class="share-download-btn" @click.stop="downloadSharedFile" title="下载文件">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-              </button>
-              <button v-if="canShare" type="button" class="share-close-btn" @click.stop="closeSharedMedia">关闭共享</button>
+              <button type="button" class="share-close-btn" @click.stop="closeSharedMedia">关闭共享</button>
             </div>
 
-            <div v-if="activeShare.kind !== 'webpage'" class="share-footer">
+            <div v-if="activeShare.kind !== 'webpage' && activeShare.kind !== 'audio'" class="share-footer">
               <div class="share-meta">
                 <div v-if="activeShare.kind === 'video' || activeShare.kind === 'livestream'" class="video-control-panel">
                   <button
@@ -927,33 +930,22 @@
                   <span v-if="activeShare.kind !== 'livestream'" class="time-label">
                     {{ formatDuration(sharedVideoUi.currentTime) }} / {{ formatDuration(sharedVideoUi.duration) }}
                   </span>
-                  <button
-                    class="control-pill fullscreen-btn"
-                    :disabled="!canLocalControlSharedVideo"
-                    @click="toggleSharedVideoFullscreen"
-                    title="全屏"
-                  >
-                    <svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <polyline points="15 3 21 3 21 9"/>
-                      <polyline points="9 21 3 21 3 15"/>
-                      <line x1="21" y1="3" x2="14" y2="10"/>
-                      <line x1="3" y1="21" x2="10" y2="14"/>
-                    </svg>
-                  </button>
                 </div>
               </div>
               <div class="share-actions">
-                <button v-if="activeShare.kind === 'image' && canManageSharedMedia" class="ghost-btn" @click="toggleSharedImageZoom">
-                  {{ activeShare.zoomed ? '还原' : '放大' }}
+                <template v-if="activeShare.kind === 'image' && canManageSharedMedia">
+                  <button class="control-pill zoom-btn" :disabled="!activeShare.zoomed" @click.stop="zoomOutSharedImage" title="缩小">
+                    <svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  </button>
+                  <button class="control-pill zoom-btn" :disabled="activeShare.zoomed" @click.stop="zoomInSharedImage" title="放大">
+                    <svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  </button>
+                </template>
+                <button v-if="canDownloadSharedFile()" class="control-pill download-btn" @click.stop="downloadSharedFile" title="下载">
+                  <svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 </button>
-                <button v-if="activeShare.kind !== 'video' && activeShare.kind !== 'livestream'" class="ghost-btn stage-fullscreen-btn" @click="toggleSharedStageFullscreen">
-                  <svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <polyline points="15 3 21 3 21 9"/>
-                    <polyline points="9 21 3 21 3 15"/>
-                    <line x1="21" y1="3" x2="14" y2="10"/>
-                    <line x1="3" y1="21" x2="10" y2="14"/>
-                  </svg>
-                  <span>全屏</span>
+                <button class="control-pill fullscreen-btn" @click.stop="activeShare.kind === 'video' || activeShare.kind === 'livestream' ? toggleSharedVideoFullscreen() : toggleSharedStageFullscreen()" title="全屏">
+                  <svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
                 </button>
               </div>
             </div>
@@ -967,22 +959,22 @@
 
         <div class="share-toolbar">
           <div class="share-toolbar-actions">
-            <button v-if="canShare" class="primary-btn" @click="chooseMedia">文件共享</button>
-            <button v-if="canShare" class="secondary-btn" @click="startScreenShare">屏幕共享</button>
-            <button v-if="canShare" class="secondary-btn" @click="openWebpageShareDialog">网页共享</button>
-            <button v-if="canShare" class="secondary-btn" @click="openLivestreamDialog">直播共享</button>
-            <button v-if="canOpenGameMenu" class="secondary-btn" :class="{ active: showGameMenu || activeGame || gameInvite }" @click="toggleGameMenu">
-              {{ gameMenuButtonLabel }}
+            <button v-if="canShare" class="primary-btn file-share-btn" @click="chooseMedia">文件共享</button>
+            <button v-if="canShare" class="secondary-btn screen-share-btn" @click="startScreenShare">屏幕共享</button>
+            <button v-if="canShare" class="secondary-btn web-share-btn" @click="openWebpageShareDialog">网页共享</button>
+            <button v-if="canShare" class="secondary-btn live-share-btn" @click="openLivestreamDialog">直播共享</button>
+            <button v-if="canOpenGameMenu" class="secondary-btn game-menu-btn" :class="{ active: showGameMenu || activeGame || gameInvite }" @click="openGameMenu">
+              游戏共享
             </button>
             <button
               v-if="canRequestRemoteControl"
-              class="secondary-btn"
+              class="secondary-btn remote-req-btn"
               :disabled="!isConnected"
               @click="requestRemoteControl"
             >
               申请控制 {{ activeShare?.ownerName || '共享者' }}
             </button>
-            <button v-if="isRemoteController" class="ghost-btn danger" @click="releaseRemoteControl">结束远控</button>
+            <button v-if="isRemoteController" class="ghost-btn danger remote-end-btn" @click="releaseRemoteControl">结束远控</button>
           </div>
           <div class="share-toolbar-hint">{{ remoteControlHint }}</div>
         </div>
@@ -1310,14 +1302,20 @@ const livestreamError = ref('')
 
 // Audio player state
 const sharedAudioRef = ref(null)
-const audioVisualizerCanvasRef = ref(null)
 const audioPlaying = ref(false)
 const audioDuration = ref(0)
 const audioCurrentTime = ref(0)
 const audioMuted = ref(false)
-let audioContext = null
-let audioAnalyser = null
+const audioVolume = ref(1)
+const audioLocalPaused = ref(false)
+const lastAudioHeartbeatAt = ref(0)
+const audioProgressPercent = computed(() => {
+  if (!audioDuration.value || audioDuration.value <= 0) return 0
+  return Math.min(100, (audioCurrentTime.value / audioDuration.value) * 100)
+})
 let audioVisualizerRaf = null
+const audioSpectrumCanvasRef = ref(null)
+const audioBeatFlash = ref(false)
 
 const currentLivestreamUrl = ref('')
 const lastRemotePointerSentAt = ref(0)
@@ -1450,6 +1448,7 @@ const canRefreshSharedWebpage = computed(() => Boolean(canControlSharedWebpage.v
 const canStepBackwardSharedWebpage = computed(() => canControlSharedWebpage.value && getWebpageHistoryEntries(activeShare.value).length > 1)
 const canStepForwardSharedWebpage = computed(() => canControlSharedWebpage.value && getWebpageHistoryEntries(activeShare.value).length > 1)
 const canLocalControlSharedVideo = computed(() => Boolean(activeShare.value && (activeShare.value.kind === 'video' || activeShare.value.kind === 'livestream') && isConnected.value))
+const canLocalControlSharedAudio = computed(() => Boolean(activeShare.value && activeShare.value.kind === 'audio' && isConnected.value))
 const canControlShare = computed(() => isConnected.value && (isShareOwner.value || isRemoteController.value))
 const canManageSharedMedia = computed(() => isConnected.value && (canControlShare.value || isAdmin.value))
 const canCloseGameStage = computed(() => Boolean(canShare.value && (showGameMenu.value || activeGame.value || gameInvite.value)))
@@ -1710,21 +1709,6 @@ const showGameHome = computed(() => {
   )
 })
 const showGameStage = computed(() => Boolean(showGameMenu.value || activeGame.value || gameInvite.value))
-const gameMenuButtonLabel = computed(() => {
-  if (activeGame.value?.gameType === 'gomoku') {
-    return activeGame.value.status === 'playing' ? '棋局中' : '查看棋局'
-  }
-
-  if (activeGame.value?.gameType === 'landlord') {
-    return activeGame.value.status === 'playing' ? '牌局中' : '查看牌局'
-  }
-
-  if (gameInvite.value) {
-    return '邀请处理中'
-  }
-
-  return showGameMenu.value ? '收起游戏' : '游戏菜单'
-})
 const gamePanelStatus = computed(() => {
   if (activeGame.value?.gameType === 'gomoku') {
     return activeGame.value.status === 'playing' ? '对局中' : '已结束'
@@ -2755,18 +2739,9 @@ function setGameState(nextGameState) {
   }
 }
 
-function toggleGameMenu() {
-  const nextVisible = !showGameMenu.value
-  showGameMenu.value = nextVisible
-
-  if (nextVisible && !gameInvite.value && !activeGame.value) {
-    selectedGameType.value = ''
-  }
-
-  if (!showGameMenu.value && !gameInvite.value && !activeGame.value) {
-    closeInvitePicker()
-    selectedGomokuInviteeId.value = ''
-    selectedLandlordInviteeIds.value = []
+function openGameMenu() {
+  showGameMenu.value = true
+  if (!gameInvite.value && !activeGame.value) {
     selectedGameType.value = ''
   }
 }
@@ -3310,10 +3285,11 @@ function clearActiveShare() {
       sharedAudioRef.value.pause()
       sharedAudioRef.value.removeAttribute('src')
     }
-    destroyAudioVisualizer()
     audioPlaying.value = false
     audioDuration.value = 0
     audioCurrentTime.value = 0
+    audioLocalPaused.value = false
+    lastAudioHeartbeatAt.value = 0
   }
 
   if (activeShare.value?.url) {
@@ -6081,7 +6057,11 @@ function closeGameStage() {
   }
 
   if (!activeGame.value && !gameInvite.value) {
-    toggleGameMenu()
+    closeInvitePicker()
+    selectedGomokuInviteeId.value = ''
+    selectedLandlordInviteeIds.value = []
+    selectedGameType.value = ''
+    showGameMenu.value = false
     return
   }
 
@@ -6899,21 +6879,152 @@ function handleSharedVideoProgressInput(event) {
   }
 }
 // ===== Audio Player Functions =====
+function startAudioVisualizer() {
+  if (audioVisualizerRaf) return
+  const canvas = audioSpectrumCanvasRef.value
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  const dpr = window.devicePixelRatio || 1
+  const barCount = 32
+  const smoothedValues = new Float32Array(barCount)
+  const targetValues = new Float32Array(barCount)
+  let t = 0
+  let beatTimer = 0
+  let beatIntensity = 0
+  let burstBars = new Set()
+
+  function resize() {
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = rect.width * dpr
+    canvas.height = rect.height * dpr
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  }
+  resize()
+
+  function draw() {
+    audioVisualizerRaf = requestAnimationFrame(draw)
+    const w = canvas.width / dpr
+    const h = canvas.height / dpr
+    ctx.clearRect(0, 0, w, h)
+
+    t += 0.028
+    beatTimer += 0.028
+
+    const beatPeriod = 0.45 + 0.15 * Math.sin(t * 0.3)
+    if (beatTimer >= beatPeriod) {
+      beatTimer = 0
+      beatIntensity = 0.6 + 0.4 * Math.random()
+      burstBars.clear()
+      const burstCount = 2 + Math.floor(Math.random() * 4)
+      for (let b = 0; b < burstCount; b++) {
+        burstBars.add(Math.floor(Math.random() * barCount))
+      }
+    }
+
+    beatIntensity *= 0.92
+
+    for (let i = 0; i < barCount; i++) {
+      const freq = i / barCount
+      const bassWeight = Math.max(0, 1 - freq * 2.5)
+      const midWeight = Math.exp(-Math.pow((freq - 0.35) * 3, 2))
+      const highWeight = Math.max(0, (freq - 0.6) * 0.8)
+
+      const bass = bassWeight * (
+        0.35 * Math.abs(Math.sin(t * 2.1 + i * 0.15)) +
+        0.25 * Math.abs(Math.sin(t * 3.7 + i * 0.08)) +
+        0.15 * Math.abs(Math.sin(t * 5.3))
+      )
+      const mid = midWeight * (
+        0.2 * Math.abs(Math.sin(t * 4.2 + i * 0.25)) +
+        0.15 * Math.abs(Math.sin(t * 6.8 + i * 0.12)) +
+        0.1 * Math.abs(Math.cos(t * 3.1 + i * 0.3))
+      )
+      const high = highWeight * (
+        0.12 * Math.abs(Math.sin(t * 7.5 + i * 0.4)) +
+        0.08 * Math.abs(Math.sin(t * 11.2 + i * 0.2))
+      )
+
+      const beatBoost = beatIntensity * (bassWeight * 0.5 + midWeight * 0.3 + 0.2)
+      const burst = burstBars.has(i) ? 0.3 * beatIntensity : 0
+      const noise = 0.04 * (Math.random() - 0.5)
+
+      targetValues[i] = Math.max(0.03, Math.min(1,
+        bass + mid + high + beatBoost + burst + noise
+      ))
+    }
+
+    for (let i = 0; i < barCount; i++) {
+      const speed = targetValues[i] > smoothedValues[i] ? 0.35 : 0.15
+      smoothedValues[i] += (targetValues[i] - smoothedValues[i]) * speed
+    }
+
+    const totalGap = (barCount - 1) * 3
+    const barWidth = Math.max(2, (w - totalGap) / barCount)
+    let x = 0
+    let totalEnergy = 0
+
+    for (let i = 0; i < barCount; i++) {
+      const val = smoothedValues[i]
+      totalEnergy += val
+      const barH = Math.max(2, val * h * 0.92)
+      const y = (h - barH) / 2
+
+      const gradient = ctx.createLinearGradient(x, y, x, y + barH)
+      const hue = 230 + (i / barCount) * 60
+      gradient.addColorStop(0, `hsla(${hue}, 80%, 72%, 0.9)`)
+      gradient.addColorStop(1, `hsla(${hue}, 70%, 50%, 0.6)`)
+
+      ctx.beginPath()
+      ctx.roundRect(x, y, barWidth, barH, barWidth / 2)
+      ctx.fillStyle = gradient
+      ctx.fill()
+
+      if (val > 0.55) {
+        ctx.shadowColor = `hsla(${hue}, 80%, 65%, ${0.2 + val * 0.3})`
+        ctx.shadowBlur = 6 + val * 6
+        ctx.fill()
+        ctx.shadowBlur = 0
+      }
+
+      x += barWidth + 3
+    }
+
+    if (beatIntensity > 0.3) {
+      audioBeatFlash.value = true
+    } else {
+      audioBeatFlash.value = false
+    }
+  }
+  draw()
+}
+
+function stopAudioVisualizer() {
+  if (audioVisualizerRaf) {
+    cancelAnimationFrame(audioVisualizerRaf)
+    audioVisualizerRaf = null
+  }
+  const canvas = audioSpectrumCanvasRef.value
+  if (canvas) {
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+  }
+  audioBeatFlash.value = false
+}
+
 function handleAudioLoaded() {
   if (!sharedAudioRef.value) return
   audioDuration.value = sharedAudioRef.value.duration || 0
-  audioPlaying.value = false
-  // Initialize visualizer
-  initAudioVisualizer()
 }
 
 function handleAudioPlaying() {
   audioPlaying.value = true
+  startAudioVisualizer()
 }
 
 function handleAudioPlay() {
   audioPlaying.value = true
-  // Sync: emit play to other members
+  audioLocalPaused.value = false
+  startAudioVisualizer()
   if (canGlobalControlShare.value && !shouldSuppressShareEvents()) {
     emitShareControl('play', { playing: true })
   }
@@ -6921,75 +7032,154 @@ function handleAudioPlay() {
 
 function handleAudioPause() {
   if (!activeShare.value || activeShare.value.kind !== 'audio') return
-  // If we're suppressing events, just update local state
   if (shouldSuppressShareEvents()) {
     audioPlaying.value = false
+    stopAudioVisualizer()
     return
   }
   audioPlaying.value = false
-  if (canGlobalControlShare.value) {
+  stopAudioVisualizer()
+  if (canGlobalControlShare.value && !audioLocalPaused.value) {
     emitShareControl('pause', { playing: false })
   }
 }
 
 function handleAudioTimeUpdate() {
   if (!sharedAudioRef.value) return
+
+  if (!canGlobalControlShare.value && audioLocalPaused.value) {
+    return
+  }
+
   audioCurrentTime.value = sharedAudioRef.value.currentTime || 0
+
+  if (shouldSuppressShareEvents() || activeShare.value?.kind !== 'audio' || !canGlobalControlShare.value) {
+    return
+  }
+
+  if (sharedAudioRef.value.paused) return
+
+  const now = Date.now()
+  if (now - lastAudioHeartbeatAt.value < 1000) return
+  lastAudioHeartbeatAt.value = now
+
+  emitShareControl('heartbeat', {
+    currentTime: sharedAudioRef.value.currentTime,
+    playing: true,
+    duration: audioDuration.value
+  })
 }
 
 function handleAudioEnded() {
   audioPlaying.value = false
+  audioLocalPaused.value = false
+  stopAudioVisualizer()
+  if (canGlobalControlShare.value) {
+    emitShareControl('pause', { playing: false })
+  }
 }
 
 function toggleAudioPlayback() {
-  if (!sharedAudioRef.value) return
-  if (sharedAudioRef.value.paused) {
+  if (!canLocalControlSharedAudio.value || !sharedAudioRef.value) return
+
+  const audio = sharedAudioRef.value
+
+  if (!canGlobalControlShare.value) {
+    if (audio.paused) {
+      if (activeShare.value?.sync && !activeShare.value.sync.playing) return
+      audioLocalPaused.value = false
+      audioPlaying.value = true
+      audio.play().catch(() => {})
+      startAudioVisualizer()
+    } else {
+      audioLocalPaused.value = true
+      audioPlaying.value = false
+      audio.pause()
+      stopAudioVisualizer()
+    }
+    return
+  }
+
+  audioLocalPaused.value = false
+  if (audio.paused) {
     audioPlaying.value = true
     suppressShareEvents(500)
-    sharedAudioRef.value.play().catch(() => {})
-    if (canGlobalControlShare.value) {
-      emitShareControl('play', { playing: true })
-    }
+    audio.play().catch(() => {})
+    startAudioVisualizer()
+    emitShareControl('play', { playing: true })
   } else {
     audioPlaying.value = false
     suppressShareEvents(500)
-    sharedAudioRef.value.pause()
-    if (canGlobalControlShare.value) {
-      emitShareControl('pause', { playing: false })
+    audio.pause()
+    stopAudioVisualizer()
+    emitShareControl('pause', { playing: false })
+  }
+}
+
+let audioProgressDragging = false
+function handleAudioProgressDown(e) {
+  audioProgressDragging = true
+  handleAudioProgressSeek(e)
+  const onMove = (ev) => { if (audioProgressDragging) handleAudioProgressSeek(ev) }
+  const onUp = () => { audioProgressDragging = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onUp)
+}
+function handleAudioProgressSeek(e) {
+  if (!sharedAudioRef.value) return
+  const rect = e.currentTarget.getBoundingClientRect()
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX
+  const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+  const time = pct * audioDuration.value
+  sharedAudioRef.value.currentTime = time
+  audioCurrentTime.value = time
+}
+
+function handleAudioVolumeChange(e) {
+  const val = parseFloat(e.target.value)
+  audioVolume.value = val
+  if (sharedAudioRef.value) {
+    sharedAudioRef.value.volume = val
+    if (val === 0) {
+      audioMuted.value = true
+      sharedAudioRef.value.muted = true
+    } else if (audioMuted.value) {
+      audioMuted.value = false
+      sharedAudioRef.value.muted = false
     }
   }
 }
 
-function handleAudioSeek(event) {
-  if (!sharedAudioRef.value) return
-  const time = Number(event.target.value)
-  if (!Number.isFinite(time)) return
-  sharedAudioRef.value.currentTime = time
-  audioCurrentTime.value = time
+function handleAudioProgressSliderInput(e) {
+  if (!sharedAudioRef.value || !canGlobalControlShare.value) return
+  const time = parseFloat(e.target.value)
+  if (Number.isFinite(time)) {
+    sharedAudioRef.value.currentTime = time
+    audioCurrentTime.value = time
+    emitShareControl('seek', {
+      currentTime: time,
+      playing: audioPlaying.value,
+      duration: audioDuration.value
+    })
+  }
+}
+
+function getAudioFormatLabel(fileName) {
+  if (!fileName) return 'Audio'
+  const ext = fileName.split('.').pop()?.toUpperCase()
+  const map = { MP3: 'MP3', WAV: 'WAV', FLAC: 'FLAC', OGG: 'OGG', AAC: 'AAC', M4A: 'M4A', WMA: 'WMA', OPUS: 'OPUS' }
+  return map[ext] || ext || 'Audio'
 }
 
 function toggleAudioMute() {
   if (!sharedAudioRef.value) return
   audioMuted.value = !audioMuted.value
   sharedAudioRef.value.muted = audioMuted.value
-  if (canGlobalControlShare.value) {
-    emitShareControl('seek', {
-      currentTime: audioCurrentTime.value,
-      playing: audioPlaying.value,
-      duration: audioDuration.value,
-      muted: audioMuted.value
-    })
-  }
 }
 
 function applyAudioSync(sync, forceSeek = false) {
   const audio = sharedAudioRef.value
   if (!audio || !sync) return
-
-  if (typeof sync.muted === 'boolean') {
-    audioMuted.value = sync.muted
-    audio.muted = sync.muted
-  }
 
   audioDuration.value = Number(sync.duration || audio.duration || 0)
 
@@ -7005,170 +7195,20 @@ function applyAudioSync(sync, forceSeek = false) {
 
   if (sync.playing) {
     audioPlaying.value = true
+    audioLocalPaused.value = false
     if (audio.paused) {
       suppressShareEvents(500)
       audio.play().catch((error) => console.error('同步播放音乐失败:', error))
+      nextTick(() => startAudioVisualizer())
+    } else {
+      startAudioVisualizer()
     }
   } else {
     audioPlaying.value = false
-    audio.pause()
-  }
-}
-
-function initAudioVisualizer() {
-  const audio = sharedAudioRef.value
-  const canvas = audioVisualizerCanvasRef.value
-  if (!audio || !canvas) return
-  try {
-    if (!audioContext) {
-      audioContext = new (window.AudioContext || window.webkitAudioContext)()
+    if (!audioLocalPaused.value) {
+      audio.pause()
     }
-    if (!audioAnalyser) {
-      const source = audioContext.createMediaElementSource(audio)
-      audioAnalyser = audioContext.createAnalyser()
-      audioAnalyser.fftSize = 256
-      source.connect(audioAnalyser)
-      audioAnalyser.connect(audioContext.destination)
-    }
-    drawAudioVisualizer()
-  } catch (e) {
-    // CORS or already connected - use fallback visualizer
-    console.warn('Audio visualizer init failed, using fallback:', e.message)
-    drawFallbackVisualizer()
-  }
-}
-
-function drawAudioVisualizer() {
-  const canvas = audioVisualizerCanvasRef.value
-  if (!canvas || !audioAnalyser) return
-  const ctx = canvas.getContext('2d')
-  const bufferLength = audioAnalyser.frequencyBinCount
-  const dataArray = new Uint8Array(bufferLength)
-  
-  function draw() {
-    if (!audioPlaying.value) {
-      audioVisualizerRaf = requestAnimationFrame(draw)
-      return
-    }
-    audioVisualizerRaf = requestAnimationFrame(draw)
-    audioAnalyser.getByteFrequencyData(dataArray)
-    
-    const width = canvas.width
-    const height = canvas.height
-    ctx.clearRect(0, 0, width, height)
-    
-    // Background gradient
-    const bgGrad = ctx.createLinearGradient(0, 0, 0, height)
-    bgGrad.addColorStop(0, 'rgba(15, 23, 42, 0.95)')
-    bgGrad.addColorStop(1, 'rgba(30, 41, 59, 0.95)')
-    ctx.fillStyle = bgGrad
-    ctx.fillRect(0, 0, width, height)
-    
-    const barCount = 64
-    const barWidth = width / barCount
-    const step = Math.floor(bufferLength / barCount)
-    
-    for (let i = 0; i < barCount; i++) {
-      const value = dataArray[i * step] / 255
-      const barHeight = value * height * 0.85
-      const x = i * barWidth
-      
-      // Dynamic gradient per bar
-      const hue = 200 + (i / barCount) * 120 // blue → purple → pink
-      const saturation = 70 + value * 30
-      const lightness = 45 + value * 25
-      const alpha = 0.7 + value * 0.3
-      
-      const grad = ctx.createLinearGradient(x, height, x, height - barHeight)
-      grad.addColorStop(0, `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`)
-      grad.addColorStop(1, `hsla(${hue + 30}, ${saturation}%, ${lightness + 15}%, ${alpha * 0.6})`)
-      
-      ctx.fillStyle = grad
-      ctx.fillRect(x + 1, height - barHeight, barWidth - 2, barHeight)
-      
-      // Glow effect on top
-      ctx.fillStyle = `hsla(${hue}, 100%, 75%, ${value * 0.6})`
-      ctx.fillRect(x + 1, height - barHeight, barWidth - 2, 2)
-    }
-  }
-  draw()
-}
-
-function drawFallbackVisualizer() {
-  const canvas = audioVisualizerCanvasRef.value
-  if (!canvas) return
-  const ctx = canvas.getContext('2d')
-  
-  function draw() {
-    audioVisualizerRaf = requestAnimationFrame(draw)
-    if (!audioPlaying.value) {
-      const width = canvas.width
-      const height = canvas.height
-      ctx.clearRect(0, 0, width, height)
-      const bgGrad = ctx.createLinearGradient(0, 0, 0, height)
-      bgGrad.addColorStop(0, 'rgba(15, 23, 42, 0.95)')
-      bgGrad.addColorStop(1, 'rgba(30, 41, 59, 0.95)')
-      ctx.fillStyle = bgGrad
-      ctx.fillRect(0, 0, width, height)
-      
-      const barCount = 64
-      const barWidth = width / barCount
-      for (let i = 0; i < barCount; i++) {
-        const barHeight = 4 + Math.sin(Date.now() / 800 + i * 0.3) * 3
-        const x = i * barWidth
-        const hue = 200 + (i / barCount) * 120
-        ctx.fillStyle = `hsla(${hue}, 60%, 50%, 0.4)`
-        ctx.fillRect(x + 1, height - barHeight, barWidth - 2, barHeight)
-      }
-      return
-    }
-    
-    const width = canvas.width
-    const height = canvas.height
-    ctx.clearRect(0, 0, width, height)
-    
-    const bgGrad = ctx.createLinearGradient(0, 0, 0, height)
-    bgGrad.addColorStop(0, 'rgba(15, 23, 42, 0.95)')
-    bgGrad.addColorStop(1, 'rgba(30, 41, 59, 0.95)')
-    ctx.fillStyle = bgGrad
-    ctx.fillRect(0, 0, width, height)
-    
-    const barCount = 64
-    const barWidth = width / barCount
-    const t = Date.now() / 1000
-    
-    for (let i = 0; i < barCount; i++) {
-      const value = 0.3 + 0.5 * Math.abs(Math.sin(t * 2 + i * 0.4)) * Math.abs(Math.cos(t * 1.5 + i * 0.2))
-      const barHeight = value * height * 0.7
-      const x = i * barWidth
-      const hue = 200 + (i / barCount) * 120
-      const saturation = 70 + value * 30
-      const lightness = 45 + value * 25
-      const alpha = 0.7 + value * 0.3
-      
-      const grad = ctx.createLinearGradient(x, height, x, height - barHeight)
-      grad.addColorStop(0, `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`)
-      grad.addColorStop(1, `hsla(${hue + 30}, ${saturation}%, ${lightness + 15}%, ${alpha * 0.6})`)
-      
-      ctx.fillStyle = grad
-      ctx.fillRect(x + 1, height - barHeight, barWidth - 2, barHeight)
-      
-      ctx.fillStyle = `hsla(${hue}, 100%, 75%, ${value * 0.6})`
-      ctx.fillRect(x + 1, height - barHeight, barWidth - 2, 2)
-    }
-  }
-  draw()
-}
-
-function destroyAudioVisualizer() {
-  if (audioVisualizerRaf) {
-    cancelAnimationFrame(audioVisualizerRaf)
-    audioVisualizerRaf = null
-  }
-  if (audioContext) {
-    try { audioContext.close() } catch {}
-    audioContext = null
-    audioAnalyser = null
+    stopAudioVisualizer()
   }
 }
 
@@ -7201,6 +7241,26 @@ function toggleSharedImageZoom() {
   })
 }
 
+function zoomInSharedImage() {
+  if (!activeShare.value || activeShare.value.kind !== 'image' || shouldSuppressShareEvents() || !canManageSharedMedia.value || activeShare.value.zoomed) {
+    return
+  }
+
+  emitShareControl('image-zoom', {
+    zoomed: true
+  })
+}
+
+function zoomOutSharedImage() {
+  if (!activeShare.value || activeShare.value.kind !== 'image' || shouldSuppressShareEvents() || !canManageSharedMedia.value || !activeShare.value.zoomed) {
+    return
+  }
+
+  emitShareControl('image-zoom', {
+    zoomed: false
+  })
+}
+
 function closeSharedMedia(fromTrackEnded = false) {
   if (!activeShare.value || !canShare.value) {
     return
@@ -7220,7 +7280,6 @@ function closeSharedMedia(fromTrackEnded = false) {
       sharedAudioRef.value.pause()
       sharedAudioRef.value.removeAttribute('src')
     }
-    destroyAudioVisualizer()
     audioPlaying.value = false
     audioDuration.value = 0
     audioCurrentTime.value = 0
@@ -7524,153 +7583,301 @@ onUnmounted(() => {
   flex: 0 0 auto;
 }
 
-.leave-btn,
-.primary-btn,
-.secondary-btn,
-/* ===== Audio Player ===== */
-.audio-player-container {
+/* ===== Audio / Turntable Player ===== */
+.turntable-player {
   display: flex;
   flex-direction: column;
+  align-items: center;
   width: 100%;
   height: 100%;
-  background: rgba(15, 23, 42, 0.95);
+  background: linear-gradient(160deg, #0a0a1a 0%, #0d0f20 40%, #0a0a1a 100%);
   border-radius: 16px;
   overflow: hidden;
   position: relative;
+  padding: 20px 20px 16px;
+  box-sizing: border-box;
+  gap: 10px;
+  transition: background 0.15s ease;
+}
+.turntable-player.beat-flash {
+  background: linear-gradient(160deg, #0e0e28 0%, #111438 40%, #0e0e28 100%);
 }
 
-.audio-visualizer-canvas {
-  flex: 1;
-  width: 100%;
-  min-height: 120px;
-  display: block;
+.turntable-aurora {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+.aurora-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(40px);
+  opacity: 0.12;
+  transition: opacity 0.15s ease;
+}
+.turntable-player.beat-flash .aurora-blob {
+  opacity: 0.22;
+}
+.aurora-blob-1 {
+  width: 200px;
+  height: 200px;
+  background: #6366f1;
+  top: -40px;
+  left: -30px;
+  animation: aurora-drift-1 8s ease-in-out infinite alternate;
+}
+.aurora-blob-2 {
+  width: 160px;
+  height: 160px;
+  background: #2563eb;
+  bottom: 20%;
+  right: -20px;
+  animation: aurora-drift-2 10s ease-in-out infinite alternate;
+}
+.aurora-blob-3 {
+  width: 120px;
+  height: 120px;
+  background: #a855f7;
+  top: 50%;
+  left: 40%;
+  animation: aurora-drift-3 12s ease-in-out infinite alternate;
+}
+@keyframes aurora-drift-1 {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(40px, 30px) scale(1.15); }
+}
+@keyframes aurora-drift-2 {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-30px, -20px) scale(1.1); }
+}
+@keyframes aurora-drift-3 {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(20px, -30px) scale(1.2); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob { animation: none !important; }
 }
 
-.audio-player-info {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 20px 8px;
-}
-
-.audio-player-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.8), rgba(59, 130, 246, 0.8));
+.turntable-body {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  animation: audio-icon-pulse 2s ease-in-out infinite;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  position: relative;
+  z-index: 1;
 }
-.audio-player-icon svg {
-  width: 24px;
-  height: 24px;
+
+.turntable-spectrum {
+  width: 100%;
+  height: 48px;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+.spectrum-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.turntable-stage {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.turntable-platter {
+  position: relative;
+  width: min(260px, 44vh);
+  height: min(260px, 44vh);
+}
+
+.turntable-vinyl {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%,
+    #1a1a2e 0%, #16162b 20%, #1a1a2e 40%,
+    #16162b 60%, #1a1a2e 80%, #111 100%
+  );
+  box-shadow:
+    0 0 0 3px #0f0f1a,
+    0 0 0 4px rgba(255,255,255,0.03),
+    0 0 40px rgba(99, 102, 241, 0.08),
+    0 12px 32px rgba(0,0,0,0.5);
+  transition: transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              box-shadow 0.4s ease;
+}
+.turntable-vinyl.playing {
+  animation: vinyl-spin 3s linear infinite;
+  box-shadow:
+    0 0 0 3px #0f0f1a,
+    0 0 0 4px rgba(255,255,255,0.03),
+    0 0 50px rgba(99, 102, 241, 0.18),
+    0 0 80px rgba(37, 99, 235, 0.1),
+    0 12px 32px rgba(0,0,0,0.5);
+}
+@keyframes vinyl-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turntable-vinyl.playing { animation: none; }
+}
+
+.vinyl-groove {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  pointer-events: none;
+}
+.vinyl-groove:nth-child(1) { inset: 8%; }
+.vinyl-groove:nth-child(2) { inset: 13%; }
+.vinyl-groove:nth-child(3) { inset: 18%; }
+.vinyl-groove:nth-child(4) { inset: 23%; }
+.vinyl-groove:nth-child(5) { inset: 30%; border-color: rgba(255,255,255,0.04); }
+.vinyl-groove:nth-child(6) { inset: 37%; border-color: rgba(255,255,255,0.05); }
+.vinyl-groove:nth-child(7) { inset: 44%; }
+.vinyl-groove:nth-child(8) { inset: 51%; }
+
+.vinyl-label {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 96px; height: 96px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #2563eb, #a855f7);
+  background-size: 200% 200%;
+  animation: label-gradient-shift 4s ease infinite;
+  box-shadow: inset 0 0 14px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.08), 0 0 20px rgba(99,102,241,0.15);
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+@keyframes label-gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+.vinyl-label-icon {
+  color: rgba(255,255,255,0.85);
+  margin-bottom: 2px;
+}
+.vinyl-label-icon svg {
+  width: 24px; height: 24px;
   fill: none;
-  stroke: #fff;
-  stroke-width: 2;
+  stroke: currentColor;
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-@keyframes audio-icon-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.08); }
+.vinyl-label-text {
+  font-size: 9px;
+  color: rgba(255,255,255,0.65);
+  white-space: nowrap;
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.1;
 }
 
-.audio-player-meta {
-  min-width: 0;
-  flex: 1;
+.turntable-tonearm {
+  position: absolute;
+  top: -14px;
+  right: 6px;
+  width: 56px;
+  height: 120px;
+  pointer-events: none;
+  transform: rotate(-15deg);
+  transform-origin: top right;
+  transition: transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-.audio-player-title {
+.turntable-tonearm.playing {
+  transform: rotate(22deg);
+}
+.tonearm-pivot {
+  position: absolute;
+  top: 0; right: 0;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #475569, #1e293b);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.tonearm-shaft {
+  position: absolute;
+  top: 14px; right: 7px;
+  width: 3px;
+  height: 90px;
+  background: linear-gradient(180deg, #64748b, #334155);
+  border-radius: 1px;
+}
+.tonearm-head {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 13px; height: 4px;
+  background: #94a3b8;
+  border-radius: 2px;
+  transform: rotate(-15deg);
+  transform-origin: right center;
+}
+
+.turntable-info {
+  text-align: center;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+.turntable-trackname {
+  font-family: 'DM Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 14px;
-  font-weight: 700;
-  color: #f1f5f9;
+  font-weight: 600;
+  color: #e2e8f0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.audio-player-size {
-  font-size: 12px;
-  color: #94a3b8;
+.turntable-metadata {
+  font-size: 11px;
+  color: #64748b;
   margin-top: 2px;
 }
 
-.audio-player-controls {
-  display: flex;
+.turntable-control-bar {
+  display: grid;
+  grid-template-columns: clamp(40px, 3vw, 52px) clamp(40px, 3vw, 52px) minmax(0, 1fr) auto auto auto;
   align-items: center;
-  gap: 10px;
-  padding: 8px 20px 16px;
-}
-
-.audio-ctrl-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(139, 92, 246, 0.2);
-  color: #c4b5fd;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
+  gap: clamp(8px, 1vw, 14px);
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
   flex-shrink: 0;
-}
-.audio-ctrl-btn svg {
-  width: 18px;
-  height: 18px;
-  fill: currentColor;
-}
-.audio-ctrl-btn:hover {
-  background: rgba(139, 92, 246, 0.4);
-  color: #fff;
-  transform: scale(1.08);
-}
-.audio-ctrl-btn.active {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.7), rgba(59, 130, 246, 0.7));
-  color: #fff;
-}
-.audio-ctrl-btn.muted {
-  color: #64748b;
 }
 
 .audio-progress-slider {
-  flex: 1;
-  appearance: none;
-  -webkit-appearance: none;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(148, 163, 184, 0.2);
-  outline: none;
-  cursor: pointer;
-}
-.audio-progress-slider::-webkit-slider-thumb {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #8b5cf6, #3b82f6);
-  cursor: pointer;
-  box-shadow: 0 0 8px rgba(139, 92, 246, 0.5);
-}
-.audio-progress-slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #8b5cf6, #3b82f6);
-  cursor: pointer;
-  border: none;
-}
-
-.audio-time-label {
-  font-size: 11px;
-  color: #94a3b8;
-  min-width: 80px;
-  text-align: right;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+  width: 100%;
+  min-width: 0;
+  accent-color: #60a5fa;
 }
 
 /* ===== Generic File Display ===== */
@@ -7910,32 +8117,30 @@ onUnmounted(() => {
 
 .share-toolbar {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 12px 14px;
   border-radius: 22px;
   border: 1px solid rgba(167, 185, 210, 0.1);
   background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
 }
 
 .share-toolbar-actions {
   display: flex;
   flex-wrap: nowrap;
   gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
-.share-toolbar-actions::-webkit-scrollbar { display: none; }
 .share-toolbar-actions > * {
   flex: 0 0 auto;
 }
 
-
 .share-toolbar-hint {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 12px;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .share-content-frame {
@@ -8209,7 +8414,7 @@ onUnmounted(() => {
 
 .video-control-panel {
   display: grid;
-  grid-template-columns: clamp(40px, 3vw, 52px) clamp(40px, 3vw, 52px) minmax(0, 1fr) auto clamp(40px, 3vw, 52px);
+  grid-template-columns: clamp(40px, 3vw, 52px) clamp(40px, 3vw, 52px) minmax(0, 1fr) auto;
   align-items: center;
   gap: clamp(8px, 1vw, 14px);
   width: 100%;
@@ -8272,6 +8477,34 @@ onUnmounted(() => {
   stroke-linejoin: round;
 }
 
+.progress-slider {
+  width: 100%;
+  min-width: 0;
+  accent-color: #60a5fa;
+}
+
+.download-btn {
+  width: clamp(40px, 3vw, 52px);
+  height: clamp(38px, 4vw, 48px);
+  min-width: clamp(40px, 3vw, 52px);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.zoom-btn {
+  width: clamp(40px, 3vw, 52px);
+  height: clamp(38px, 4vw, 48px);
+  min-width: clamp(40px, 3vw, 52px);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .fullscreen-btn {
   width: clamp(40px, 3vw, 52px);
   height: clamp(38px, 4vw, 48px);
@@ -8283,19 +8516,13 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.progress-slider {
-  width: 100%;
-  min-width: 0;
-  accent-color: #60a5fa;
-}
-
 :fullscreen .share-meta {
   width: 100%;
 }
 
 :fullscreen .video-control-panel {
   width: 100%;
-  grid-template-columns: clamp(48px, 4.2vw, 60px) clamp(48px, 4.2vw, 60px) minmax(0, 1fr) auto clamp(48px, 4.2vw, 60px);
+  grid-template-columns: clamp(48px, 4.2vw, 60px) clamp(48px, 4.2vw, 60px) minmax(0, 1fr) auto;
 }
 
 :fullscreen .progress-slider {
@@ -8351,13 +8578,6 @@ onUnmounted(() => {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: clamp(10px, 1vw, 14px);
-}
-
-.stage-fullscreen-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
 }
 
 .share-close-drawer {
@@ -10914,21 +11134,13 @@ onUnmounted(() => {
     height: clamp(420px, 72vh, 620px);
   }
 
-  .share-toolbar,
-  .share-actions {
-    align-items: stretch;
+  .share-toolbar {
+    padding: 10px 12px;
+    border-radius: 18px;
   }
 
   .share-toolbar-actions {
-    align-items: center;
     gap: 6px;
-  }
-  .share-toolbar-actions .primary-btn,
-  .share-toolbar-actions .secondary-btn {
-    padding: 0 7px;
-    min-height: 32px;
-    font-size: 11px;
-    border-radius: 10px;
   }
 
   .share-actions,
@@ -11079,20 +11291,12 @@ onUnmounted(() => {
   }
 
   .share-toolbar {
-    padding: 12px;
-    border-radius: 18px;
+    padding: 10px;
+    border-radius: 16px;
   }
 
   .share-toolbar-actions > * {
     flex: 0 0 auto;
-  }
-
-  .share-toolbar-actions .primary-btn,
-  .share-toolbar-actions .secondary-btn {
-    padding: 0 6px;
-    min-height: 30px;
-    font-size: 10px;
-    border-radius: 9px;
   }
 
   .share-actions > * {
@@ -11229,35 +11433,7 @@ onUnmounted(() => {
 
 
 
-/* share-toolbar 内按钮强制紧凑，覆盖全局按钮样式 */
-.share-toolbar-actions .primary-btn,
-.share-toolbar-actions .secondary-btn {
-  padding: 0 8px;
-  min-height: 34px;
-  height: 34px;
-  font-size: 12px;
-  border-radius: 11px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-@media (max-width: 720px) {
-  .share-toolbar-actions .primary-btn,
-  .share-toolbar-actions .secondary-btn {
-    padding: 0 7px;
-    min-height: 32px;
-    height: 32px;
-    font-size: 11px;
-    border-radius: 10px;
-  }
-}
-@media (max-width: 480px) {
-  .share-toolbar-actions .primary-btn,
-  .share-toolbar-actions .secondary-btn {
-    padding: 0 6px;
-    min-height: 30px;
-    height: 30px;
-    font-size: 10px;
-    border-radius: 9px;
-  }
-}
+
+
+
 </style>
