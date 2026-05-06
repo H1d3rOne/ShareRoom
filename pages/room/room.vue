@@ -676,6 +676,10 @@
                 @seeked="handleSharedVideoSeek"
                 @timeupdate="handleSharedVideoTimeUpdate"
               ></video>
+              <div v-if="isVideoLikeShare(activeShare) && !livestreamReady && activeShare.kind === 'livestream'" class="share-loading">
+                <div class="loader"></div>
+                <p>正在加载直播...</p>
+              </div>
 
               <div v-else-if="activeShare.kind === 'audio'" class="turntable-player" :class="{ 'beat-flash': audioBeatFlash }">
                 <div class="turntable-aurora" aria-hidden="true">
