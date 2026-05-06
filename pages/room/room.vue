@@ -10711,7 +10711,7 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
-  max-height: 90px;
+  max-height: 110px;
   overflow-y: auto;
   overflow-x: hidden;
 }
