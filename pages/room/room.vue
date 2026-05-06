@@ -674,16 +674,7 @@
                 @pause="handleSharedVideoPause"
                 @seeked="handleSharedVideoSeek"
                 @timeupdate="handleSharedVideoTimeUpdate"
-                @playing="handleLivestreamPlaying"
               ></video>
-              <div v-if="activeShare.kind === 'livestream' && !livestreamReady && !livestreamError" class="share-loading">
-                <div class="loader"></div>
-                <p>Loading...</p>
-              </div>
-              <div v-if="activeShare.kind === 'livestream' && livestreamError" class="share-loading" style="background: rgba(15, 23, 42, 0.9);">
-                <p style="color: #f87171;">{{ livestreamError }}</p>
-                <button class="control-pill" style="margin-top: 12px;" @click="retryLivestream">重试</button>
-              </div>
 
               <div v-else-if="activeShare.kind === 'audio'" class="turntable-player" :class="{ 'beat-flash': audioBeatFlash }">
                 <div class="turntable-aurora" aria-hidden="true">
@@ -8915,17 +8906,6 @@ onUnmounted(() => {
   text-align: center;
   color: var(--text-secondary);
   padding: 24px;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: rgba(15, 23, 42, 0.85);
-  z-index: 10;
 }
 
 .empty-share h3 {
