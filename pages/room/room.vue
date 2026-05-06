@@ -10662,9 +10662,9 @@ onUnmounted(() => {
 }
 
 .participants-panel {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
 }
 
 .participant-invite-banner {
@@ -10711,7 +10711,7 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
-  max-height: 95px;
+  max-height: 90px;
   overflow-y: auto;
   overflow-x: hidden;
 }
