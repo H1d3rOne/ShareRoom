@@ -1157,67 +1157,98 @@ app.post('/api/resolve-livestream', async (req, res) => {
     const mobileUA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
 
     if (effectivePlatform === 'douyin') {
-      // 策略：从抖音直播间页面HTML中提取流URL
-      // webcast.amemv.com API已被限制(forbidden)，改为页面解析
-      try {
-        const resp = await fetch(url, {
-          headers: {
-            'User-Agent': mobileUA,
-            'Referer': 'https://live.douyin.com/',
-            'Cookie': 'ttwid=1|test'
-          },
-          redirect: 'follow'
-        })
-        const html = await resp.text()
+      // 使用抖音官方 API 获取直播流
+      let roomId = ''
 
-        // 解码HTML实体和JS转义
-        const decoded = html
-          .replace(/&amp;/g, '&')
-          .replace(/\\u0026/g, '&')
-          .replace(/\\u003d/g, '=')
+      // 优先从查询参数中提取 room_id (真正的长ID)
+      const urlObj = new URL(url.startsWith('http') ? url : 'https://live.douyin.com/' + url)
+      roomId = urlObj.searchParams.get('room_id')
 
-        // 提取HLS流URL，优先选择高清(hd)画质
-        const hlsPriority = ['Stage0T000hd', 'Stage0T000sd', 'Stage0T000ld', 'or4', '_sd', '_ld', '_hd']
-        for (const quality of hlsPriority) {
-          const pattern = '(https?://pull-hls[^\\s"<>]+' + quality + '\\.m3u8[^\\s"<>]*)'
-          const hlsMatch = decoded.match(new RegExp(pattern))
-          if (hlsMatch) {
-            streamUrls.hls = hlsMatch[1]
-            break
-          }
+      // 如果没有，从路径中提取
+      if (!roomId) {
+        const cleanUrl = url.split('?')[0]
+        const roomIdMatch = cleanUrl.match(/live\.douyin\.com\/(\d{19}|[a-zA-Z0-9]+)/)
+        if (roomIdMatch) {
+          roomId = roomIdMatch[1]
         }
-        // 如果没有匹配到特定画质，取任意m3u8
-        if (!streamUrls.hls) {
+      }
+
+      // 尝试从短链接提取
+      if (!roomId || !/^\d{19}$/.test(roomId)) {
+        try {
+          const redirectResp = await fetch(url, {
+            headers: { 'User-Agent': mobileUA },
+            redirect: 'manual'
+          })
+          const redirectUrl = redirectResp.headers.get('location') || url
+          const redirectUrlObj = new URL(redirectUrl.startsWith('http') ? redirectUrl : 'https://live.douyin.com/' + redirectUrl)
+          const redirectRoomId = redirectUrlObj.searchParams.get('room_id')
+          if (redirectRoomId && /^\d{19}$/.test(redirectRoomId)) {
+            roomId = redirectRoomId
+          }
+        } catch (e) {
+          console.error('抖音短链接解析失败:', e.message)
+        }
+      }
+
+      if (!roomId) {
+        return res.status(400).json({ ok: false, error: '无法识别抖音直播间ID' })
+      }
+
+      try {
+        const douyinHeaders = {
+          'User-Agent': mobileUA,
+          'authority': 'webcast.amemv.com',
+          'cookie': '_tea_utm_cache_1128={%22utm_source%22:%22copy%22%2C%22utm_medium%22:%22android%22%2C%22utm_campaign%22:%22client_share%22}',
+          'Referer': 'https://webcast.amemv.com/'
+        }
+
+        const params = new URLSearchParams({
+          type_id: '0',
+          live_id: '1',
+          room_id: roomId,
+          app_id: '1128'
+        })
+
+        const apiResp = await fetch('https://webcast.amemv.com/webcast/room/reflow/info/?' + params.toString(), {
+          headers: douyinHeaders
+        })
+
+        const apiData = await apiResp.json()
+
+        if (apiData?.data?.room?.stream_url) {
+          const streamUrl = apiData.data.room.stream_url
+          if (streamUrl.hls_pull_url) streamUrls.hls = streamUrl.hls_pull_url
+          if (streamUrl.rtmp_pull_url) streamUrls.flv = streamUrl.rtmp_pull_url.replace('rtmp://', 'https://').replace('/live/', '/')
+        }
+
+        console.log('抖音API解析结果: HLS=', streamUrls.hls ? 'YES' : 'NO', ', FLV=', streamUrls.flv ? 'YES' : 'NO')
+      } catch (e) {
+        console.error('抖音API解析失败:', e.message)
+      }
+
+      // 如果API失败，尝试备用方案
+      if (!streamUrls.hls && !streamUrls.flv) {
+        try {
+          const resp = await fetch(url, {
+            headers: {
+              'User-Agent': mobileUA,
+              'Referer': 'https://live.douyin.com/',
+              'Cookie': 'ttwid=1|test'
+            },
+            redirect: 'follow'
+          })
+          const html = await resp.text()
+          const decoded = html.replace(/&amp;/g, '&').replace(/\\u0026/g, '&').replace(/\\u003d/g, '=')
+
           const anyHls = decoded.match(/(https?:\/\/pull-hls[^\s"<>]+?\.m3u8[^\s"<>]*)/)
           if (anyHls) streamUrls.hls = anyHls[1]
-        }
 
-        // 提取FLV流URL，优先选择高清画质
-        for (const quality of hlsPriority) {
-          const pattern = '(https?://pull-flv[^\\s"<>]+' + quality + '\\.flv[^\\s"<>]*)'
-          const flvMatch = decoded.match(new RegExp(pattern))
-          if (flvMatch) {
-            streamUrls.flv = flvMatch[1]
-            break
-          }
-        }
-        if (!streamUrls.flv) {
           const anyFlv = decoded.match(/(https?:\/\/pull-flv[^\s"<>]+?\.flv[^\s"<>]*)/)
           if (anyFlv) streamUrls.flv = anyFlv[1]
+        } catch (e) {
+          console.error('抖音备用解析失败:', e.message)
         }
-
-        // 也尝试从 webcast-reflow-player 标签的 url 属性提取
-        if (!streamUrls.flv) {
-          const playerUrl = decoded.match(/webcast-reflow-player[^>]+url="(https?:\/\/pull-flv[^"]+?)"/)
-          if (playerUrl) streamUrls.flv = playerUrl[1]
-        }
-
-        // 清理URL末尾的反斜杠和引号残留
-        if (streamUrls.hls) streamUrls.hls = streamUrls.hls.replace(/[\\\"]+$/g, '')
-        if (streamUrls.flv) streamUrls.flv = streamUrls.flv.replace(/[\\\"]+$/g, '')
-        console.log('抖音解析结果: HLS=', streamUrls.hls ? 'YES' : 'NO', ', FLV=', streamUrls.flv ? 'YES' : 'NO')
-      } catch (e) {
-        console.error('抖音页面解析失败:', e.message)
       }
 
       if (!streamUrls.hls && !streamUrls.flv) {
