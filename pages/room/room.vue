@@ -1417,6 +1417,7 @@ const showGameMenu = ref(false)
 const gameInvite = ref(null)
 const activeGame = ref(null)
 const selectedGameType = ref('')
+const isLocalInviter = ref(false)
 const selectedGomokuInviteeId = ref('')
 const selectedLandlordInviteeIds = ref([])
 const selectedLandlordCardIds = ref([])
@@ -1706,13 +1707,13 @@ const isPendingInviteForMe = computed(() => myGameInviteEntry.value?.status === 
 const canCancelGameInvite = computed(() => {
   return Boolean(
     gameInvite.value
-    && (gameInvite.value.inviterId === selfId.value || myGameInviteEntry.value)
+    && (gameInvite.value.inviterId === selfId.value || isLocalInviter.value || myGameInviteEntry.value)
   )
 })
 const canForceStartGameInvite = computed(() => {
   return Boolean(
     gameInvite.value
-    && gameInvite.value.inviterId === selfId.value
+    && (gameInvite.value.inviterId === selfId.value || isLocalInviter.value)
   )
 })
 const canInviteGomoku = computed(() => {
@@ -1853,7 +1854,7 @@ const gameInviteBannerTitle = computed(() => {
     return `${gameInvite.value.inviterName} 邀请你加入一局${getGameTypeLabel(gameInvite.value.gameType)}`
   }
 
-  if (gameInvite.value.inviterId === selfId.value) {
+  if (gameInvite.value.inviterId === selfId.value || isLocalInviter.value) {
     return `已向 ${formatGameInviteeNames(gameInvitees.value)} 发起${getGameTypeLabel(gameInvite.value.gameType)}邀请`
   }
 
@@ -2893,14 +2894,18 @@ function setGameInvite(nextInvite) {
   if (gameInvite.value) {
     showGameMenu.value = true
     closeInvitePicker()
-  } else if (!activeGame.value) {
-    selectedLandlordInviteeIds.value = []
+  } else {
+    isLocalInviter.value = false
+    if (!activeGame.value) {
+      selectedLandlordInviteeIds.value = []
+    }
   }
 }
 
 function setGameState(nextGameState) {
   activeGame.value = cloneGameState(nextGameState)
   if (activeGame.value) {
+    isLocalInviter.value = false
     showGameMenu.value = true
     closeInvitePicker()
   } else {
@@ -6124,6 +6129,7 @@ function inviteToGomoku(peer) {
     return
   }
 
+  isLocalInviter.value = true
   socket.value.emit('game-invite-send', {
     roomId: roomId.value,
     gameType: 'gomoku',
@@ -6136,6 +6142,7 @@ function inviteToLandlord() {
     return
   }
 
+  isLocalInviter.value = true
   socket.value.emit('game-invite-send', {
     roomId: roomId.value,
     gameType: 'landlord',
