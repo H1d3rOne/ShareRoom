@@ -8,7 +8,7 @@
       ref="fileInputRef"
       class="hidden-input"
       type="file"
-      accept="image/*,video/*,audio/*,*/*"
+      accept="*/*"
       @change="handleFileChange"
     />
 
