@@ -4091,7 +4091,7 @@ function startFileShare(file, kind) {
     sync: (kind === 'video' || kind === 'audio')
       ? {
           action: 'ready',
-          playing: true,
+          playing: false,
           currentTime: 0,
           duration: 0,
           muted: false,
