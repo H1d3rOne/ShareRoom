@@ -512,6 +512,7 @@ const createGomokuGameState = (invite) => {
     id: createId('game_'),
     gameType: 'gomoku',
     status: 'playing',
+    inviterId: invite.inviterId,
     blackId: blackPlayer.id,
     blackName: blackPlayer.name,
     whiteId: whitePlayer.id,
@@ -554,6 +555,7 @@ const createLandlordGameState = (invite) => {
     id: createId('game_'),
     gameType: 'landlord',
     status: 'playing',
+    inviterId: invite.inviterId,
     phase: 'bidding',
     players: players.map((player) => ({
       id: player.id,
@@ -1785,6 +1787,38 @@ io.on('connection', (socket) => {
     notifyGameStateUpdated(payload.roomId, room)
   })
 
+  socket.on('game-invite-force-start', (payload = {}) => {
+    const session = socketSessions.get(socket.id)
+    if (!session?.roomId || session.roomId !== payload.roomId) {
+      return
+    }
+
+    const room = rooms.get(payload.roomId)
+    if (!room?.gameInvite || room.gameInvite.id !== payload.inviteId) {
+      return
+    }
+
+    if (room.gameInvite.inviterId !== socket.id) {
+      return
+    }
+
+    const invite = room.gameInvite
+    invite.invitees.forEach((invitee) => {
+      invitee.status = 'accepted'
+    })
+
+    const nextGameState = createGameStateFromInvite(invite)
+    room.gameInvite = null
+    notifyGameInviteUpdated(payload.roomId, null)
+
+    if (!nextGameState) {
+      return
+    }
+
+    room.gameState = nextGameState
+    notifyGameStateUpdated(payload.roomId, room)
+  })
+
   socket.on('game-move', (payload = {}) => {
     const session = socketSessions.get(socket.id)
     if (!session?.roomId || session.roomId !== payload.roomId) {
@@ -2083,6 +2117,71 @@ io.on('connection', (socket) => {
     }
 
     room.gameState = null
+    notifyGameStateUpdated(payload.roomId, room)
+  })
+
+  socket.on('game-rematch', (payload = {}) => {
+    const session = socketSessions.get(socket.id)
+    if (!session?.roomId || session.roomId !== payload.roomId) {
+      return
+    }
+
+    const room = rooms.get(payload.roomId)
+    if (!room?.gameState || room.gameState.id !== payload.gameId) {
+      return
+    }
+
+    if (room.gameState.status !== 'finished') {
+      return
+    }
+
+    const inviterId = room.gameState.inviterId
+    const isInviter = inviterId
+      ? inviterId === socket.id
+      : (room.gameState.gameType === 'gomoku'
+        ? room.gameState.blackId === socket.id
+        : room.gameState.players?.[0]?.id === socket.id)
+
+    if (!isInviter) {
+      return
+    }
+
+    const oldGame = room.gameState
+    const invite = {
+      gameType: oldGame.gameType,
+      inviterId: socket.id,
+      inviterName: session.userName,
+      invitees: []
+    }
+
+    if (oldGame.gameType === 'gomoku') {
+      const otherId = oldGame.blackId === socket.id ? oldGame.whiteId : oldGame.blackId
+      const otherParticipant = room.participants.get(otherId)
+      if (!otherParticipant) {
+        return
+      }
+      invite.invitees = [{ id: otherId, name: otherParticipant.userName, status: 'accepted' }]
+    } else if (oldGame.gameType === 'landlord') {
+      invite.invitees = oldGame.players
+        .filter((player) => player.id !== socket.id)
+        .map((player) => {
+          const participant = room.participants.get(player.id)
+          if (!participant) return null
+          return { id: player.id, name: participant.userName, status: 'accepted' }
+        })
+        .filter(Boolean)
+    }
+
+    if (invite.invitees.length === 0) {
+      return
+    }
+
+    const nextGameState = createGameStateFromInvite(invite)
+    if (!nextGameState) {
+      return
+    }
+
+    room.gameState = nextGameState
     notifyGameStateUpdated(payload.roomId, room)
   })
 

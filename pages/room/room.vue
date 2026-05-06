@@ -397,6 +397,13 @@
                       拒绝
                     </button>
                     <button
+                      v-if="canForceStartGameInvite"
+                      class="primary-btn compact"
+                      @click.stop="forceStartGameInvite"
+                    >
+                      开始对局
+                    </button>
+                    <button
                       v-if="canCancelGameInvite"
                       class="ghost-btn danger"
                       @click.stop="cancelGameInvite"
@@ -471,6 +478,13 @@
                       @click.stop="resignGomokuGame"
                     >
                       认输
+                    </button>
+                    <button
+                      v-if="activeGame.status === 'finished' && canRematchGame"
+                      class="primary-btn compact"
+                      @click.stop="rematchGame"
+                    >
+                      再来一局
                     </button>
                     <button
                       v-if="activeGame.status === 'finished' && canCloseActiveGame"
@@ -633,6 +647,13 @@
                   </div>
 
                   <div class="gomoku-actions">
+                    <button
+                      v-if="activeGame.status === 'finished' && canRematchGame"
+                      class="primary-btn compact"
+                      @click.stop="rematchGame"
+                    >
+                      再来一局
+                    </button>
                     <button
                       v-if="activeGame.status === 'finished' && canCloseActiveGame"
                       class="ghost-btn"
@@ -1052,6 +1073,10 @@
               <div class="panel-title">房间成员</div>
             </div>
             <span class="panel-meta">{{ participants.length }} 人</span>
+            <button type="button" class="member-grid-toggle" @click.stop="memberGridCols = memberGridCols === 2 ? 4 : 2" :title="memberGridCols === 2 ? '切换4列' : '切换2列'">
+              <svg v-if="memberGridCols === 2" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+              <svg v-else viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="8" rx="2"/><rect x="3" y="13" width="18" height="8" rx="2"/></svg>
+            </button>
           </div>
           <div v-if="invitePicker.visible" class="participant-invite-banner">
             <div class="participant-invite-copy">
@@ -1061,7 +1086,7 @@
             </div>
             <button type="button" class="tiny-btn" @click="closeInvitePicker">取消</button>
           </div>
-          <div class="member-grid">
+          <div ref="memberGridRef" class="member-grid" :class="'cols-' + memberGridCols" :style="{ maxHeight: memberGridMaxHeight }">
             <div
               class="member-card"
               :class="{ speaking: peerAudioLevels[peer.id] > 0.05, 'invite-target': canInvitePeerFromList(peer), 'seat-assigned': Boolean(getParticipantSeatLabel(peer.id)) }"
@@ -1073,7 +1098,7 @@
                 class="member-video"
                 autoplay playsinline
               ></video>
-              <UserAvatar v-if="!hasPeerVideo(peer.id)" :avatar-id="peer.avatarId" :name="peer.name" :size="64" />
+              <UserAvatar v-if="!hasPeerVideo(peer.id)" :avatar-id="peer.avatarId" :name="peer.name" :size="64" class="member-avatar" />
               <div v-if="peerAudioLevels[peer.id] > 0.05" class="speaking-ring"></div>
               <div v-if="hasPeerAudio(peer.id)" class="member-mic-indicator" :class="{ 'mic-active': peerAudioLevels[peer.id] > 0.05 }">
                 <svg class="member-mic-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -1416,6 +1441,10 @@ const remoteVideoElements = reactive({})
 const peerStreamCatalog = reactive({})
 const memberVideoElements = reactive({})
 const openMemberMenuId = ref('')
+const memberGridCols = ref(2)
+const memberGridRef = ref(null)
+const memberGridMaxHeight = ref('')
+let gridResizeObserver = null
 const peerAudioLevels = reactive({})
 const peerMediaVersion = reactive({})
 const peerAudioContexts = {}
@@ -1680,6 +1709,12 @@ const canCancelGameInvite = computed(() => {
     && (gameInvite.value.inviterId === selfId.value || myGameInviteEntry.value)
   )
 })
+const canForceStartGameInvite = computed(() => {
+  return Boolean(
+    gameInvite.value
+    && gameInvite.value.inviterId === selfId.value
+  )
+})
 const canInviteGomoku = computed(() => {
   return Boolean(
     isConnected.value
@@ -1857,6 +1892,22 @@ const canCloseActiveGame = computed(() => {
     && activeGame.value
     && activeGame.value.status === 'finished'
   )
+})
+const canRematchGame = computed(() => {
+  if (!isConnected.value || !activeGame.value || activeGame.value.status !== 'finished') {
+    return false
+  }
+  const inviterId = activeGame.value.inviterId
+  if (inviterId) {
+    return inviterId === selfId.value
+  }
+  if (activeGame.value.gameType === 'gomoku') {
+    return activeGame.value.blackId === selfId.value
+  }
+  if (activeGame.value.gameType === 'landlord') {
+    return activeGame.value.players?.[0]?.id === selfId.value
+  }
+  return false
 })
 const gomokuWinningCellSet = computed(() => {
   return new Set((activeGame.value?.winningLine || []).map((cell) => `${cell.row}:${cell.col}`))
@@ -3718,6 +3769,18 @@ function hasMemberActions(peer) {
 function toggleMemberMenu(peerId) {
   openMemberMenuId.value = openMemberMenuId.value === peerId ? '' : peerId
 }
+
+function updateGridMaxHeight() {
+  const grid = memberGridRef.value
+  if (!grid) return
+  const cols = memberGridCols.value
+  const gap = 10
+  const width = grid.clientWidth
+  const cardWidth = (width - gap * (cols - 1)) / cols
+  memberGridMaxHeight.value = cardWidth + 'px'
+}
+
+watch(memberGridCols, () => nextTick(updateGridMaxHeight))
 
 function closeMemberMenu() {
   openMemberMenuId.value = ''
@@ -6103,6 +6166,28 @@ function respondToGameInvite(accepted) {
   })
 }
 
+function forceStartGameInvite() {
+  if (!socket.value?.connected || !gameInvite.value || !canForceStartGameInvite.value) {
+    return
+  }
+
+  socket.value.emit('game-invite-force-start', {
+    roomId: roomId.value,
+    inviteId: gameInvite.value.id
+  })
+}
+
+function rematchGame() {
+  if (!socket.value?.connected || !activeGame.value || !canRematchGame.value) {
+    return
+  }
+
+  socket.value.emit('game-rematch', {
+    roomId: roomId.value,
+    gameId: activeGame.value.id
+  })
+}
+
 function placeGomokuStone(row, col) {
   if (!socket.value?.connected || !canPlaceGomokuStone(row, col)) {
     return
@@ -7541,10 +7626,21 @@ watch(
 onMounted(() => {
   connectSocket()
   document.addEventListener('click', closeMemberMenu)
+  nextTick(() => {
+    updateGridMaxHeight()
+    if (memberGridRef.value) {
+      gridResizeObserver = new ResizeObserver(() => updateGridMaxHeight())
+      gridResizeObserver.observe(memberGridRef.value)
+    }
+  })
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', closeMemberMenu)
+  if (gridResizeObserver) {
+    gridResizeObserver.disconnect()
+    gridResizeObserver = null
+  }
   if (sharedVideoUiTicker) {
     clearInterval(sharedVideoUiTicker)
     sharedVideoUiTicker = null
@@ -10708,24 +10804,28 @@ onUnmounted(() => {
 }
 
 .member-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  max-height: 70px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.member-grid.cols-2 .member-card {
+  width: calc(50% - 5px);
+}
+
+.member-grid.cols-4 .member-card {
+  width: calc(25% - 8px);
 }
 
 .member-card {
   position: relative;
   aspect-ratio: 1;
-  border-radius: 20px;
+  border-radius: 16px;
   overflow: hidden;
   background: linear-gradient(160deg, rgba(15, 23, 42, 0.85), rgba(30, 41, 59, 0.72));
   border: 2px solid rgba(167, 185, 210, 0.12);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
   cursor: default;
 }
@@ -10748,7 +10848,7 @@ onUnmounted(() => {
 .speaking-ring {
   position: absolute;
   inset: 0;
-  border-radius: 20px;
+  border-radius: 16px;
   border: 3px solid rgba(34, 197, 94, 0.7);
   animation: speaking-ripple 1.2s ease-in-out infinite;
   pointer-events: none;
@@ -10783,13 +10883,23 @@ onUnmounted(() => {
   object-fit: cover;
 }
 
+.member-avatar {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: 70% !important;
+  height: 70% !important;
+  border-radius: 50% !important;
+}
+
 .member-mic-indicator {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   background: rgba(15, 23, 42, 0.85);
   backdrop-filter: blur(6px);
@@ -10817,8 +10927,8 @@ onUnmounted(() => {
 }
 
 .member-mic-icon {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   stroke: #4ade80;
   fill: none;
   stroke-width: 2;
@@ -10871,7 +10981,7 @@ onUnmounted(() => {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 20px 8px 8px;
+  padding: 18px 6px 6px;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
   text-align: center;
   z-index: 2;
@@ -10914,6 +11024,51 @@ onUnmounted(() => {
   width: 16px;
   height: 16px;
   fill: #e2e8f0;
+}
+
+.member-grid-toggle {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(167, 185, 210, 0.2);
+  background: rgba(15, 23, 42, 0.6);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  margin-left: auto;
+}
+
+.member-grid-toggle:hover {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(96, 165, 250, 0.4);
+}
+
+.member-grid-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: #94a3b8;
+  stroke-width: 1.5;
+}
+
+.member-grid.cols-4 .member-mic-indicator {
+  width: 32px;
+  height: 32px;
+}
+
+.member-grid.cols-4 .member-mic-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.member-grid.cols-4 .member-badge-tag {
+  font-size: 8px;
+  padding: 1px 4px;
+}
+
+.member-grid.cols-4 .member-name span {
+  font-size: 9px;
 }
 
 .member-dropdown {
