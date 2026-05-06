@@ -670,16 +670,15 @@
                 preload="auto"
                 @loadedmetadata="handleSharedVideoLoaded"
                 @canplay="handleSharedVideoCanPlay"
-                @playing="handleSharedVideoPlaying"
                 @play="handleSharedVideoPlay"
                 @pause="handleSharedVideoPause"
                 @seeked="handleSharedVideoSeek"
                 @timeupdate="handleSharedVideoTimeUpdate"
-                @loadeddata="handleSharedVideoLoadedData"
+                @playing="handleLivestreamPlaying"
               ></video>
               <div v-if="activeShare.kind === 'livestream' && !livestreamReady && !livestreamError" class="share-loading">
                 <div class="loader"></div>
-                <p>正在加载直播...</p>
+                <p>Loading...</p>
               </div>
               <div v-if="activeShare.kind === 'livestream' && livestreamError" class="share-loading" style="background: rgba(15, 23, 42, 0.9);">
                 <p style="color: #f87171;">{{ livestreamError }}</p>
