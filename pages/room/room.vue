@@ -762,9 +762,72 @@
                 ></audio>
               </div>
 
-              <div v-else-if="activeShare.kind === 'file'" class="generic-file-display">
+              <div v-else-if="activeShare.kind === 'file'" class="generic-file-display" :class="getFileCategoryClass(activeShare.fileType)">
                 <div class="generic-file-icon">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <svg v-if="getFileCategory(activeShare.fileType) === 'image'" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                  <svg v-else-if="getFileCategory(activeShare.fileType) === 'audio'" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 18V5l12-2v13"/>
+                    <circle cx="6" cy="18" r="3"/>
+                    <circle cx="18" cy="16" r="3"/>
+                  </svg>
+                  <svg v-else-if="getFileCategory(activeShare.fileType) === 'video'" viewBox="0 0 24 24" aria-hidden="true">
+                    <polygon points="23 7 16 12 23 17 23 7"/>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                  </svg>
+                  <svg v-else-if="getFileCategory(activeShare.fileType) === 'pdf'" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <text x="7" y="17" font-size="5" fill="currentColor" font-weight="bold">PDF</text>
+                  </svg>
+                  <svg v-else-if="getFileCategory(activeShare.fileType) === 'doc'" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <line x1="10" y1="9" x2="8" y2="9"/>
+                  </svg>
+                  <svg v-else-if="getFileCategory(activeShare.fileType) === 'excel'" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="8" y1="12" x2="16" y2="12"/>
+                    <line x1="8" y1="16" x2="16" y2="16"/>
+                  </svg>
+                  <svg v-else-if="getFileCategory(activeShare.fileType) === 'ppt'" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <circle cx="12" cy="14" r="3"/>
+                  </svg>
+                  <svg v-else-if="getFileCategory(activeShare.fileType) === 'txt'" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="8" y1="13" x2="16" y2="13"/>
+                    <line x1="8" y1="17" x2="14" y2="17"/>
+                  </svg>
+                  <svg v-else-if="getFileCategory(activeShare.fileType) === 'archive'" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M21 8v13H3V8"/>
+                    <path d="M1 3h22v5H1z"/>
+                    <path d="M10 12h4"/>
+                  </svg>
+                  <svg v-else-if="getFileCategory(activeShare.fileType) === 'code'" viewBox="0 0 24 24" aria-hidden="true">
+                    <polyline points="16 18 22 12 16 6"/>
+                    <polyline points="8 6 2 12 8 18"/>
+                  </svg>
+                  <svg v-else-if="getFileCategory(activeShare.fileType) === 'web'" viewBox="0 0 24 24" aria-hidden="true">
+                    <polyline points="16 18 22 12 16 6"/>
+                    <polyline points="8 6 2 12 8 18"/>
+                    <line x1="12" y1="2" x2="12" y2="22"/>
+                  </svg>
+                  <svg v-else-if="getFileCategory(activeShare.fileType) === 'xml'" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <path d="M8 13l2 2-2 2"/>
+                    <path d="M12 13l2 2-2 2"/>
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                     <polyline points="14 2 14 8 20 8"/>
                     <line x1="16" y1="13" x2="8" y2="13"/>
@@ -773,7 +836,7 @@
                   </svg>
                 </div>
                 <div class="generic-file-name">{{ activeShare.fileName || '未知文件' }}</div>
-                <div class="generic-file-meta">{{ formatFileSize(activeShare.fileSize) }} · {{ activeShare.fileType || '未知类型' }}</div>
+                <div class="generic-file-meta">{{ formatFileSize(activeShare.fileSize) }} · {{ getFileTypeLabel(activeShare.fileType) }}</div>
               </div>
 
               <div v-else-if="activeShare.kind === 'webpage'" ref="webpageShareContainerRef" class="webpage-share-container">
@@ -2180,6 +2243,62 @@ function getShareKindLabel(kind) {
   if (kind === 'audio') return '音乐'
   if (kind === 'file') return '文件'
   return '视频'
+}
+
+function getFileCategory(fileType) {
+  if (!fileType) return 'unknown'
+  const type = fileType.toLowerCase()
+
+  if (type.startsWith('image/')) return 'image'
+  if (type.startsWith('audio/')) return 'audio'
+  if (type.startsWith('video/')) return 'video'
+
+  if (type === 'application/pdf') return 'pdf'
+  if (type.includes('document') || type.includes('word')) return 'doc'
+  if (type.includes('sheet') || type.includes('excel')) return 'excel'
+  if (type.includes('presentation') || type.includes('powerpoint')) return 'ppt'
+  if (type === 'text/plain') return 'txt'
+
+  if (type.includes('zip') || type.includes('rar') || type.includes('7z') || type.includes('tar') || type.includes('gzip') || type.includes('compressed')) return 'archive'
+
+  if (type.includes('javascript') || type.includes('typescript') || type.includes('json')) return 'code'
+  if (type.includes('html') || type.includes('css')) return 'web'
+  if (type.includes('xml')) return 'xml'
+
+  return 'unknown'
+}
+
+function getFileTypeLabel(fileType) {
+  if (!fileType) return '未知类型'
+  const type = fileType.toLowerCase()
+
+  if (type.startsWith('image/')) return '图片'
+  if (type.startsWith('audio/')) return '音频'
+  if (type.startsWith('video/')) return '视频'
+
+  if (type === 'application/pdf') return 'PDF 文档'
+  if (type.includes('document') || type.includes('word')) return 'Word 文档'
+  if (type.includes('sheet') || type.includes('excel')) return 'Excel 表格'
+  if (type.includes('presentation') || type.includes('powerpoint')) return 'PPT 演示'
+  if (type === 'text/plain') return '文本文件'
+
+  if (type.includes('zip')) return 'ZIP 压缩包'
+  if (type.includes('rar')) return 'RAR 压缩包'
+  if (type.includes('7z')) return '7Z 压缩包'
+  if (type.includes('tar') || type.includes('gzip') || type.includes('compressed')) return '压缩包'
+
+  if (type.includes('javascript') || type.includes('js')) return 'JavaScript'
+  if (type.includes('typescript') || type.includes('ts')) return 'TypeScript'
+  if (type.includes('json')) return 'JSON'
+  if (type.includes('html')) return 'HTML'
+  if (type.includes('css')) return 'CSS'
+  if (type.includes('xml')) return 'XML'
+
+  return fileType
+}
+
+function getFileCategoryClass(fileType) {
+  return `file-icon-${getFileCategory(fileType)}`
 }
 
 function getSharedVideoSource(share = activeShare.value) {
@@ -7911,6 +8030,98 @@ onUnmounted(() => {
   stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* 文件类型图标颜色 */
+.generic-file-display.file-icon-image .generic-file-icon {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.1));
+}
+.generic-file-display.file-icon-image .generic-file-icon svg {
+  stroke: #3b82f6;
+}
+
+.generic-file-display.file-icon-audio .generic-file-icon {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(168, 85, 247, 0.1));
+}
+.generic-file-display.file-icon-audio .generic-file-icon svg {
+  stroke: #a855f7;
+}
+
+.generic-file-display.file-icon-video .generic-file-icon {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(236, 72, 153, 0.1));
+}
+.generic-file-display.file-icon-video .generic-file-icon svg {
+  stroke: #ec4899;
+}
+
+.generic-file-display.file-icon-pdf .generic-file-icon {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.1));
+}
+.generic-file-display.file-icon-pdf .generic-file-icon svg {
+  stroke: #ef4444;
+}
+
+.generic-file-display.file-icon-doc .generic-file-icon {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.1));
+}
+.generic-file-display.file-icon-doc .generic-file-icon svg {
+  stroke: #3b82f6;
+}
+
+.generic-file-display.file-icon-excel .generic-file-icon {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.1));
+}
+.generic-file-display.file-icon-excel .generic-file-icon svg {
+  stroke: #22c55e;
+}
+
+.generic-file-display.file-icon-ppt .generic-file-icon {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(249, 115, 22, 0.1));
+}
+.generic-file-display.file-icon-ppt .generic-file-icon svg {
+  stroke: #f97316;
+}
+
+.generic-file-display.file-icon-txt .generic-file-icon {
+  background: linear-gradient(135deg, rgba(100, 116, 139, 0.2), rgba(71, 85, 105, 0.1));
+}
+.generic-file-display.file-icon-txt .generic-file-icon svg {
+  stroke: #94a3b8;
+}
+
+.generic-file-display.file-icon-archive .generic-file-icon {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(234, 179, 8, 0.1));
+}
+.generic-file-display.file-icon-archive .generic-file-icon svg {
+  stroke: #eab308;
+}
+
+.generic-file-display.file-icon-code .generic-file-icon {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.1));
+}
+.generic-file-display.file-icon-code .generic-file-icon svg {
+  stroke: #8b5cf6;
+}
+
+.generic-file-display.file-icon-web .generic-file-icon {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(6, 182, 212, 0.1));
+}
+.generic-file-display.file-icon-web .generic-file-icon svg {
+  stroke: #06b6d4;
+}
+
+.generic-file-display.file-icon-xml .generic-file-icon {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(236, 72, 153, 0.1));
+}
+.generic-file-display.file-icon-xml .generic-file-icon svg {
+  stroke: #ec4899;
+}
+
+.generic-file-display.file-icon-unknown .generic-file-icon {
+  background: linear-gradient(135deg, rgba(100, 116, 139, 0.2), rgba(71, 85, 105, 0.1));
+}
+.generic-file-display.file-icon-unknown .generic-file-icon svg {
+  stroke: #94a3b8;
 }
 
 .generic-file-name {
