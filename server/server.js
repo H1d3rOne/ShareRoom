@@ -1157,115 +1157,71 @@ app.post('/api/resolve-livestream', async (req, res) => {
     const mobileUA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
 
     if (effectivePlatform === 'douyin') {
-      // 策略：尝试多种方式获取抖音直播流
+      // 策略：从抖音直播间页面HTML中提取流URL
+      // webcast.amemv.com API已被限制(forbidden)，改为页面解析
       try {
-        // 方法1：尝试使用抖音的 webcast API (需要提取 roomID)
-        const roomIdMatch = url.match(/live\.douyin\.com\/([a-zA-Z0-9]+)/)
-        if (roomIdMatch) {
-          const roomId = roomIdMatch[1]
-          // 尝试获取 roominfo
-          const apiResp = await fetch(`https://www.douyin.com/room/${roomId}`, {
-            headers: {
-              'User-Agent': mobileUA,
-              'Referer': 'https://www.douyin.com/',
-            },
-            redirect: 'follow'
-          })
-          const apiHtml = await apiResp.text()
+        const resp = await fetch(url, {
+          headers: {
+            'User-Agent': mobileUA,
+            'Referer': 'https://live.douyin.com/',
+            'Cookie': 'ttwid=1|test'
+          },
+          redirect: 'follow'
+        })
+        const html = await resp.text()
 
-          // 从页面中提取 room_id 和签名信息
-          const roomIdInPage = apiHtml.match(/"room_id"\s*:\s*(\d+)/)
-          const webResp = await fetch('https://webcast.amemv.com/webcast/room/data/room/', {
-            method: 'POST',
-            headers: {
-              'User-Agent': mobileUA,
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'Referer': 'https://live.douyin.com/',
-            },
-            body: `room_id=${roomIdInPage ? roomIdInPage[1] : roomId}`
-          })
-          const webData = await webResp.json()
-          if (webData?.data?.room_info?.stream_url) {
-            const streamUrl = webData.data.room_info.stream_url
-            if (streamUrl?.hls) streamUrls.hls = streamUrl.hls
-            if (streamUrl?.flv) streamUrls.flv = streamUrl.flv?.main
+        // 解码HTML实体和JS转义
+        const decoded = html
+          .replace(/&amp;/g, '&')
+          .replace(/\\u0026/g, '&')
+          .replace(/\\u003d/g, '=')
+
+        // 提取HLS流URL，优先选择高清(hd)画质
+        const hlsPriority = ['Stage0T000hd', 'Stage0T000sd', 'Stage0T000ld', 'or4', '_sd', '_ld', '_hd']
+        for (const quality of hlsPriority) {
+          const pattern = '(https?://pull-hls[^\\s"<>]+' + quality + '\\.m3u8[^\\s"<>]*)'
+          const hlsMatch = decoded.match(new RegExp(pattern))
+          if (hlsMatch) {
+            streamUrls.hls = hlsMatch[1]
+            break
           }
         }
+        // 如果没有匹配到特定画质，取任意m3u8
+        if (!streamUrls.hls) {
+          const anyHls = decoded.match(/(https?:\/\/pull-hls[^\s"<>]+?\.m3u8[^\s"<>]*)/)
+          if (anyHls) streamUrls.hls = anyHls[1]
+        }
+
+        // 提取FLV流URL，优先选择高清画质
+        for (const quality of hlsPriority) {
+          const pattern = '(https?://pull-flv[^\\s"<>]+' + quality + '\\.flv[^\\s"<>]*)'
+          const flvMatch = decoded.match(new RegExp(pattern))
+          if (flvMatch) {
+            streamUrls.flv = flvMatch[1]
+            break
+          }
+        }
+        if (!streamUrls.flv) {
+          const anyFlv = decoded.match(/(https?:\/\/pull-flv[^\s"<>]+?\.flv[^\s"<>]*)/)
+          if (anyFlv) streamUrls.flv = anyFlv[1]
+        }
+
+        // 也尝试从 webcast-reflow-player 标签的 url 属性提取
+        if (!streamUrls.flv) {
+          const playerUrl = decoded.match(/webcast-reflow-player[^>]+url="(https?:\/\/pull-flv[^"]+?)"/)
+          if (playerUrl) streamUrls.flv = playerUrl[1]
+        }
+
+        // 清理URL末尾的反斜杠和引号残留
+        if (streamUrls.hls) streamUrls.hls = streamUrls.hls.replace(/[\\\"]+$/g, '')
+        if (streamUrls.flv) streamUrls.flv = streamUrls.flv.replace(/[\\\"]+$/g, '')
+        console.log('抖音解析结果: HLS=', streamUrls.hls ? 'YES' : 'NO', ', FLV=', streamUrls.flv ? 'YES' : 'NO')
       } catch (e) {
-        console.error('抖音API尝试失败:', e.message)
-      }
-
-      // 方法2：从直播间页面HTML中提取流URL
-      if (!streamUrls.hls && !streamUrls.flv) {
-        try {
-          const resp = await fetch(url, {
-            headers: {
-              'User-Agent': mobileUA,
-              'Referer': 'https://live.douyin.com/',
-              'Cookie': 'ttwid=1|test'
-            },
-            redirect: 'follow'
-          })
-          const html = await resp.text()
-
-          // 解码HTML实体和JS转义
-          const decoded = html
-            .replace(/&amp;/g, '&')
-            .replace(/\\u0026/g, '&')
-            .replace(/\\u003d/g, '=')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&quot;/g, '"')
-
-          // 尝试从 JSON 数据中提取
-          const jsonMatch = decoded.match(/{"hls":"(https?:\/\/[^"]+)"/) || decoded.match(/"hls"\s*:\s*"(https?:\/\/[^"]+)"/)
-          if (jsonMatch) {
-            streamUrls.hls = jsonMatch[1].replace(/\\+/g, '')
-          }
-
-          // 提取HLS流URL，尝试多种模式
-          if (!streamUrls.hls) {
-            const hlsPatterns = [
-              /(https?:\/\/pull-hls[^\s"<>]+?\.m3u8[^\s"<>]*)/,
-              /(https?:\/\/aweme[^\s"<>]+?\.m3u8[^\s"<>]*)/,
-              /"hlsUrl"\s*:\s*"(https?:\/\/[^"]+)"/
-            ]
-            for (const pattern of hlsPatterns) {
-              const match = decoded.match(pattern)
-              if (match) {
-                streamUrls.hls = match[1].replace(/\\+/g, '')
-                break
-              }
-            }
-          }
-
-          // 提取FLV流URL
-          if (!streamUrls.flv) {
-            const flvPatterns = [
-              /(https?:\/\/pull-flv[^\s"<>]+?\.flv[^\s"<>]*)/,
-              /(https?:\/\/aweme[^\s"<>]+?\.flv[^\s"<>]*)/,
-              /"flvUrl"\s*:\s*"(https?:\/\/[^"]+)"/
-            ]
-            for (const pattern of flvPatterns) {
-              const match = decoded.match(pattern)
-              if (match) {
-                streamUrls.flv = match[1].replace(/\\+/g, '')
-                break
-              }
-            }
-          }
-
-          // 清理URL
-          if (streamUrls.hls) streamUrls.hls = streamUrls.hls.replace(/[\\\"]+$/g, '').replace(/&amp;/g, '&')
-          if (streamUrls.flv) streamUrls.flv = streamUrls.flv.replace(/[\\\"]+$/g, '').replace(/&amp;/g, '&')
-          console.log('抖音HTML解析结果: HLS=', streamUrls.hls ? 'YES' : 'NO', ', FLV=', streamUrls.flv ? 'YES' : 'NO')
-        } catch (e) {
-          console.error('抖音页面解析失败:', e.message)
-        }
+        console.error('抖音页面解析失败:', e.message)
       }
 
       if (!streamUrls.hls && !streamUrls.flv) {
-        return res.status(502).json({ ok: false, error: '抖音直播解析失败，请确认直播间是否在直播中，或尝试使用其他直播源' })
+        return res.status(502).json({ ok: false, error: '抖音直播解析失败，请确认直播间是否在直播中' })
       }
     } else if (effectivePlatform === 'bilibili') {
       const match = url.match(/live\.bilibili\.com\/(\d+)/)
