@@ -22,7 +22,7 @@ Vue 3 · Vite · Socket.IO · WebRTC · LiveKit（可选） · Express 5
 
 ```bash
 # 克隆仓库
-git clone <repository-url>
+git clone https://github.com/H1d3rOne/ShareRoom.git
 cd ShareRoom
 
 # 安装依赖
