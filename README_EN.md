@@ -1,7 +1,9 @@
 <p align="center">
   <h1 align="center">ShareRoom</h1>
   <p align="center">Real-time screen, file & game sharing collaboration rooms</p>
-  <p align="center"><a href="README.md">中文文档</a></p>
+  <p align="center">
+    <a href="README.md">简体中文</a> · <strong>English</strong>
+  </p>
 </p>
 
 ---

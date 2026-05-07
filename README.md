@@ -1,6 +1,9 @@
 <p align="center">
   <h1 align="center">ShareRoom</h1>
   <p align="center">实时共享屏幕、文件与游戏的多人协作房间</p>
+  <p align="center">
+    <strong>简体中文</strong> · <a href="README_EN.md">English</a>
+  </p>
 </p>
 
 ---
