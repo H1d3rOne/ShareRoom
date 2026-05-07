@@ -1434,11 +1434,6 @@ io.on('connection', (socket) => {
       ...serializeRoom(room, socket.id)
     })
 
-    if (room.gameInvite && room.gameInvite.inviterClientId === clientId && room.gameInvite.inviterId !== socket.id) {
-      room.gameInvite.inviterId = socket.id
-      notifyGameInviteUpdated(roomId, room.gameInvite)
-    }
-
     socket.to(roomId).emit('peer-joined', {
       peer: {
         id: socket.id,
@@ -1681,7 +1676,6 @@ io.on('connection', (socket) => {
       id: createId('invite_'),
       gameType,
       inviterId: socket.id,
-      inviterClientId: session.clientId,
       inviterName: session.userName,
       invitees: invitees.map((invitee) => ({
         id: invitee.id,
@@ -1711,7 +1705,6 @@ io.on('connection', (socket) => {
         room.gameInvite.inviterId,
         ...(room.gameInvite.invitees || []).map((item) => item.id)
       ].includes(socket.id)
-      && room.gameInvite.inviterClientId !== session.clientId
       && !isAdminSocket(room, socket.id)
     ) {
       return
@@ -1805,7 +1798,7 @@ io.on('connection', (socket) => {
       return
     }
 
-    if (room.gameInvite.inviterId !== socket.id && room.gameInvite.inviterClientId !== session.clientId) {
+    if (room.gameInvite.inviterId !== socket.id) {
       return
     }
 
@@ -2157,7 +2150,6 @@ io.on('connection', (socket) => {
     const invite = {
       gameType: oldGame.gameType,
       inviterId: socket.id,
-      inviterClientId: session.clientId,
       inviterName: session.userName,
       invitees: []
     }

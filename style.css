@@ -109,154 +109,23 @@ img {
   }
 }
 
-.share-toolbar-actions .primary-btn,
-.share-toolbar-actions .secondary-btn,
-.share-toolbar-actions .ghost-btn {
+.share-toolbar-actions .toolbar-btn {
   font-family: 'DM Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
-  font-weight: 500 !important;
-  font-size: 12px !important;
-  padding: 0 14px !important;
-  min-height: 34px !important;
-  height: 34px !important;
-  width: auto !important;
-  border-radius: 10px !important;
-  white-space: nowrap !important;
-  flex-shrink: 0 !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 6px !important;
-  transition: all 0.2s ease !important;
-  cursor: pointer !important;
-  letter-spacing: 0.01em !important;
-}
-
-/* ---- 文件共享 (Primary CTA) ---- */
-.share-toolbar-actions .file-share-btn {
-  padding: 0 18px !important;
-  font-weight: 600 !important;
-  background: linear-gradient(135deg, #2563eb, #7c3aed) !important;
-  border: none !important;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.18) !important;
-  color: #fff !important;
-}
-.share-toolbar-actions .file-share-btn:hover {
-  transform: translateY(-1px) !important;
-  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.28) !important;
-}
-
-/* ---- 屏幕共享 (Green accent) ---- */
-.share-toolbar-actions .screen-share-btn {
-  border: 1px solid rgba(34, 197, 94, 0.28) !important;
-  background: rgba(34, 197, 94, 0.06) !important;
-  color: #bbf7d0 !important;
-}
-.share-toolbar-actions .screen-share-btn:hover {
-  background: rgba(34, 197, 94, 0.14) !important;
-  border-color: rgba(34, 197, 94, 0.44) !important;
-  color: #dcfce7 !important;
-  transform: translateY(-1px) !important;
-}
-
-/* ---- 网页共享 (Blue tint) ---- */
-.share-toolbar-actions .web-share-btn {
-  border: 1px solid rgba(96, 165, 250, 0.28) !important;
-  background: rgba(96, 165, 250, 0.06) !important;
-  color: #bfdbfe !important;
-}
-.share-toolbar-actions .web-share-btn:hover {
-  background: rgba(96, 165, 250, 0.14) !important;
-  border-color: rgba(96, 165, 250, 0.44) !important;
-  color: #dbeafe !important;
-  transform: translateY(-1px) !important;
-}
-
-/* ---- 直播共享 (Rose accent) ---- */
-.share-toolbar-actions .live-share-btn {
-  border: 1px solid rgba(225, 29, 72, 0.28) !important;
-  background: rgba(225, 29, 72, 0.06) !important;
-  color: #fecdd3 !important;
-}
-.share-toolbar-actions .live-share-btn:hover {
-  background: rgba(225, 29, 72, 0.14) !important;
-  border-color: rgba(225, 29, 72, 0.44) !important;
-  color: #ffe4e6 !important;
-  transform: translateY(-1px) !important;
-}
-
-/* ---- 游戏菜单 (Violet accent) ---- */
-.share-toolbar-actions .game-menu-btn {
-  border: 1px solid rgba(139, 92, 246, 0.28) !important;
-  background: rgba(139, 92, 246, 0.06) !important;
-  color: #ddd6fe !important;
-}
-.share-toolbar-actions .game-menu-btn.active {
-  background: rgba(139, 92, 246, 0.18) !important;
-  border-color: rgba(139, 92, 246, 0.5) !important;
-  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.2), 0 6px 16px rgba(139, 92, 246, 0.16) !important;
-}
-.share-toolbar-actions .game-menu-btn:hover {
-  background: rgba(139, 92, 246, 0.14) !important;
-  border-color: rgba(139, 92, 246, 0.44) !important;
-  color: #ede9fe !important;
-  transform: translateY(-1px) !important;
-}
-
-/* ---- 申请控制 (Amber accent) ---- */
-.share-toolbar-actions .remote-req-btn {
-  border: 1px solid rgba(249, 115, 22, 0.28) !important;
-  background: rgba(249, 115, 22, 0.06) !important;
-  color: #fed7aa !important;
-}
-.share-toolbar-actions .remote-req-btn:hover:not(:disabled) {
-  background: rgba(249, 115, 22, 0.14) !important;
-  border-color: rgba(249, 115, 22, 0.44) !important;
-  color: #ffedd5 !important;
-  transform: translateY(-1px) !important;
-}
-.share-toolbar-actions .remote-req-btn:disabled {
-  opacity: 0.45 !important;
-  cursor: not-allowed !important;
-}
-
-/* ---- 结束远控 (Danger) ---- */
-.share-toolbar-actions .remote-end-btn {
-  border: 1px solid rgba(239, 68, 68, 0.28) !important;
-  background: rgba(239, 68, 68, 0.08) !important;
-  color: #fecaca !important;
-}
-.share-toolbar-actions .remote-end-btn:hover {
-  background: rgba(239, 68, 68, 0.2) !important;
-  border-color: rgba(239, 68, 68, 0.5) !important;
-  color: #fee2e2 !important;
-  transform: translateY(-1px) !important;
 }
 
 @media (max-width: 720px) {
-  .share-toolbar-actions .primary-btn,
-  .share-toolbar-actions .secondary-btn,
-  .share-toolbar-actions .ghost-btn {
-    padding: 0 12px !important;
+  .share-toolbar-actions .toolbar-btn {
+    padding: 0 10px !important;
     min-height: 32px !important;
-    height: 32px !important;
     font-size: 11px !important;
     border-radius: 9px !important;
   }
-  .share-toolbar-actions .file-share-btn {
-    padding: 0 16px !important;
-  }
 }
 @media (max-width: 480px) {
-  .share-toolbar-actions .primary-btn,
-  .share-toolbar-actions .secondary-btn,
-  .share-toolbar-actions .ghost-btn {
-    padding: 0 10px !important;
+  .share-toolbar-actions .toolbar-btn {
+    padding: 0 8px !important;
     min-height: 30px !important;
-    height: 30px !important;
-    font-size: 11px !important;
+    font-size: 10px !important;
     border-radius: 8px !important;
-  }
-  .share-toolbar-actions .file-share-btn {
-    padding: 0 14px !important;
   }
 }

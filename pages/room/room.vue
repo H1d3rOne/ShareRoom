@@ -80,19 +80,6 @@
             <template v-if="showGameStage">
               <div class="game-stage">
                 <div class="game-panel stage-embedded" :class="{ 'in-match': Boolean(activeGame) }">
-                  <div class="game-panel-hero">
-                    <div class="game-panel-hero-copy">
-                      <span class="game-panel-kicker">Game Lounge</span>
-                      <strong>{{ activeGame ? '房间对局已进入主舞台' : '在共享区直接发起一局互动' }}</strong>
-                      <p v-if="!activeGame">邀请房间成员加入，所有玩家都会在同一舞台中看到实时状态、回合与结果。</p>
-                    </div>
-                    <div class="game-panel-hero-orbs" aria-hidden="true">
-                      <span class="game-orb blue"></span>
-                      <span class="game-orb rose"></span>
-                      <span class="game-orb gold"></span>
-                    </div>
-                  </div>
-
                 <div class="game-panel-header">
                   <div>
                     <div class="panel-title">{{ activeGame ? getGameTypeLabel(activeGame.gameType) : '游戏菜单' }}</div>
@@ -107,9 +94,6 @@
                         <line x1="21" y1="3" x2="14" y2="10"/>
                         <line x1="3" y1="21" x2="10" y2="14"/>
                       </svg>
-                    </button>
-                    <button v-if="canShare" type="button" class="ghost-btn danger close-stage-btn" title="关闭共享" @click.stop="closeGameStage">
-                      关闭共享
                     </button>
                   </div>
                 </div>
@@ -179,7 +163,7 @@
                   <div class="game-seat-grid two-seat">
                     <article class="game-seat-card self-seat">
                       <div class="game-seat-main">
-                        <UserAvatar :avatar-id="selfAvatarId" :name="displayName" :size="52" />
+                        <UserAvatar :avatar-id="selfAvatarId" :name="displayName" :size="36" />
                         <div class="game-seat-copy">
                           <strong>{{ displayName }}</strong>
                           <span>1 号位 · 我</span>
@@ -200,12 +184,12 @@
                         </svg>
                       </span>
                       <strong>邀请成员</strong>
-                      <span>点击 + 后到成员列表选择</span>
+                      <span>点击选择成员</span>
                     </button>
 
                     <article v-else class="game-seat-card selected-seat">
                       <div class="game-seat-main">
-                        <UserAvatar :avatar-id="selectedGomokuPeer.avatarId" :name="selectedGomokuPeer.name" :size="52" />
+                        <UserAvatar :avatar-id="selectedGomokuPeer.avatarId" :name="selectedGomokuPeer.name" :size="36" />
                         <div class="game-seat-copy">
                           <strong>{{ selectedGomokuPeer.name }}</strong>
                           <span>{{ isPeerConnected(selectedGomokuPeer.id) ? '2 号位 · 已邀请' : '2 号位 · 连接中' }}</span>
@@ -219,39 +203,6 @@
                     </article>
                   </div>
 
-                  <div v-if="invitePicker.visible && invitePicker.gameType === 'gomoku'" class="game-seat-picker">
-                    <div class="game-seat-picker-header">
-                      <div>
-                        <span class="game-seat-picker-kicker">选择成员</span>
-                        <strong>为五子棋 2 号位选择一位成员</strong>
-                      </div>
-                      <button type="button" class="seat-picker-close" @click.stop="closeInvitePicker">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="m6 6 12 12M18 6 6 18" />
-                        </svg>
-                      </button>
-                    </div>
-
-                    <div class="seat-picker-grid">
-                      <button
-                        v-for="peer in invitePickerPeers"
-                        :key="peer.id"
-                        type="button"
-                        class="seat-picker-card"
-                        @click.stop="selectPeerForInvite(peer)"
-                      >
-                        <UserAvatar :avatar-id="peer.avatarId" :name="peer.name" :size="42" />
-                        <div class="seat-picker-copy">
-                          <strong>{{ peer.name }}</strong>
-                          <span>{{ isPeerConnected(peer.id) ? '在线' : '连接中' }}</span>
-                        </div>
-                      </button>
-                    </div>
-
-                    <div v-if="!invitePickerPeers.length" class="game-empty">
-                      房间里还没有可邀请的其他成员。
-                    </div>
-                  </div>
                 </div>
 
                 <div v-if="showGameHome && selectedGameType === 'landlord'" class="game-home-panel">
@@ -288,7 +239,7 @@
                   <div class="game-seat-grid three-seat">
                     <article class="game-seat-card self-seat">
                       <div class="game-seat-main">
-                        <UserAvatar :avatar-id="selfAvatarId" :name="displayName" :size="52" />
+                        <UserAvatar :avatar-id="selfAvatarId" :name="displayName" :size="36" />
                         <div class="game-seat-copy">
                           <strong>{{ displayName }}</strong>
                           <span>1 号位 · 我</span>
@@ -310,12 +261,12 @@
                           </svg>
                         </span>
                         <strong>邀请成员</strong>
-                        <span>{{ slotIndex === 0 ? '点击 + 后邀请 2 号位' : '点击 + 后邀请 3 号位' }}</span>
+                        <span>{{ slotIndex === 0 ? '点击选择 2 号位成员' : '点击选择 3 号位成员' }}</span>
                       </button>
 
                       <article v-else class="game-seat-card selected-seat">
                         <div class="game-seat-main">
-                          <UserAvatar :avatar-id="peer.avatarId" :name="peer.name" :size="52" />
+                          <UserAvatar :avatar-id="peer.avatarId" :name="peer.name" :size="36" />
                           <div class="game-seat-copy">
                             <strong>{{ peer.name }}</strong>
                             <span>{{ slotIndex === 0 ? '2 号位' : '3 号位' }} · {{ isPeerConnected(peer.id) ? '已选中' : '连接中' }}</span>
@@ -330,40 +281,6 @@
                     </template>
                   </div>
 
-                  <div v-if="invitePicker.visible && invitePicker.gameType === 'landlord'" class="game-seat-picker">
-                    <div class="game-seat-picker-header">
-                      <div>
-                        <span class="game-seat-picker-kicker">选择成员</span>
-                        <strong>为斗地主 {{ invitePicker.slotIndex === 0 ? '2 号位' : '3 号位' }} 选择一位成员</strong>
-                      </div>
-                      <button type="button" class="seat-picker-close" @click.stop="closeInvitePicker">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="m6 6 12 12M18 6 6 18" />
-                        </svg>
-                      </button>
-                    </div>
-
-                    <div class="seat-picker-grid">
-                      <button
-                        v-for="peer in invitePickerPeers"
-                        :key="peer.id"
-                        type="button"
-                        class="seat-picker-card"
-                        @click.stop="selectPeerForInvite(peer)"
-                      >
-                        <UserAvatar :avatar-id="peer.avatarId" :name="peer.name" :size="42" />
-                        <div class="seat-picker-copy">
-                          <strong>{{ peer.name }}</strong>
-                          <span>{{ isPeerConnected(peer.id) ? '在线' : '连接中' }}</span>
-                        </div>
-                      </button>
-                    </div>
-
-                    <div v-if="!invitePickerPeers.length" class="game-empty">
-                      房间里至少需要 3 人在线，才能开始斗地主。
-                    </div>
-                  </div>
-
                   <div class="game-home-actions">
                     <button
                       class="primary-btn"
@@ -371,6 +288,13 @@
                       @click.stop="inviteToLandlord"
                     >
                       发起斗地主邀请
+                    </button>
+                    <button
+                      class="primary-btn"
+                      :disabled="!canInviteLandlord || Boolean(gameInvite)"
+                      @click.stop="startLandlordGame"
+                    >
+                      开始对局
                     </button>
                   </div>
                 </div>
@@ -497,109 +421,110 @@
                 </div>
 
                 <div v-if="activeGame?.gameType === 'landlord'" class="landlord-section">
-                  <div class="game-mode-banner landlord-mode-banner">
-                    <div class="game-mode-copy">
-                      <span class="game-mode-kicker">Landlord Table</span>
-                      <strong>三人牌桌已展开，叫分、出牌与底牌状态会统一同步</strong>
-                    </div>
-                    <span class="game-mode-badge">{{ activeGame.phase === 'bidding' ? '叫分阶段' : '出牌阶段' }}</span>
-                  </div>
-                  <div class="landlord-header">
+                  <div class="landlord-table-area">
+                    <!-- 左侧对手 -->
                     <div
-                      v-for="player in activeGame.players"
-                      :key="player.id"
-                      class="landlord-player-card"
-                      :class="{
-                        current: activeGame.currentTurnId === player.id,
-                        landlord: player.role === 'landlord',
-                        self: player.id === selfId
-                      }"
+                      v-if="landlordOpponents[0]"
+                      class="landlord-opponent"
+                      :class="{ current: activeGame.currentTurnId === landlordOpponents[0].id, landlord: landlordOpponents[0].role === 'landlord' }"
                     >
-                      <div class="landlord-player-top">
-                        <div class="landlord-player-identity">
-                          <UserAvatar :avatar-id="getParticipantAvatarId(player.id)" :name="player.name" :size="28" />
-                          <strong>{{ player.name }}</strong>
-                        </div>
-                        <span>{{ getLandlordPlayerRoleLabel(player) }}</span>
+                      <div class="landlord-opponent-avatar-wrap">
+                        <UserAvatar :avatar-id="getParticipantAvatarId(landlordOpponents[0].id)" :name="landlordOpponents[0].name" :size="48" />
+                        <span v-if="activeGame.currentTurnId === landlordOpponents[0].id" class="landlord-turn-dot"></span>
                       </div>
-                      <em>{{ player.cardCount }} 张手牌</em>
+                      <strong class="landlord-opponent-name">{{ landlordOpponents[0].name }}</strong>
+                      <span class="landlord-opponent-role">{{ getLandlordPlayerRoleLabel(landlordOpponents[0]) }}</span>
+                      <em class="landlord-opponent-count">{{ landlordOpponents[0].cardCount }} 张</em>
                     </div>
-                  </div>
 
-                  <div class="landlord-status-card">
-                    <div class="landlord-status-main">
-                      <strong>{{ landlordStatusText }}</strong>
-                      <span>{{ landlordStatusSubtext }}</span>
-                    </div>
-                    <div v-if="activeGame.bottomCards?.length" class="landlord-bottom-cards">
-                      <label>底牌</label>
-                      <div class="landlord-card-row table">
+                    <!-- 中央牌桌 -->
+                    <div class="landlord-center">
+                      <!-- 状态文字 -->
+                      <div class="landlord-center-status">
+                        <strong>{{ landlordStatusText }}</strong>
+                        <span>{{ landlordStatusSubtext }}</span>
+                      </div>
+
+                      <!-- 底牌 -->
+                      <div v-if="activeGame.bottomCards?.length" class="landlord-bottom-row">
+                        <span class="landlord-bottom-label">底牌</span>
                         <span
                           v-for="card in activeGame.bottomCards"
                           :key="card.id"
-                          class="landlord-card static"
+                          class="landlord-card mini static"
                           :class="{ red: isLandlordRedCard(card) }"
                         >
                           <span class="landlord-card-rank">{{ getLandlordCardLabel(card) }}</span>
                           <small class="landlord-card-suit">{{ getLandlordCardSuitLabel(card) }}</small>
                         </span>
                       </div>
-                    </div>
-                  </div>
 
-                  <div class="landlord-table-grid">
-                    <div class="landlord-bid-panel">
-                      <div class="landlord-panel-title">叫分</div>
-                      <div class="landlord-bid-copy">{{ landlordBidWaitingText }}</div>
-                      <div v-if="activeGame.bidHistory?.length" class="landlord-bid-history">
-                        <div v-for="(item, index) in activeGame.bidHistory" :key="`${item.playerId}-${index}`" class="landlord-bid-history-item">
-                          <span>{{ item.playerName }}</span>
-                          <em>{{ item.score === 0 ? '不叫' : `${item.score} 分` }}</em>
+                      <!-- 叫分区 -->
+                      <div v-if="activeGame.phase === 'bidding'" class="landlord-center-bid">
+                        <div class="landlord-bid-copy">{{ landlordBidWaitingText }}</div>
+                        <div v-if="activeGame.bidHistory?.length" class="landlord-bid-history">
+                          <div v-for="(item, index) in activeGame.bidHistory" :key="`${item.playerId}-${index}`" class="landlord-bid-history-item">
+                            <span>{{ item.playerName }}</span>
+                            <em>{{ item.score === 0 ? '不叫' : `${item.score} 分` }}</em>
+                          </div>
                         </div>
-                      </div>
-                      <div v-if="canBidLandlord" class="landlord-bid-actions">
-                        <button
-                          v-for="score in landlordBidOptions"
-                          :key="score"
-                          class="secondary-btn"
-                          @click.stop="bidLandlordScore(score)"
-                        >
-                          {{ score === 0 ? '不叫' : `${score} 分` }}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div class="landlord-table-panel">
-                      <div class="landlord-panel-title">桌面牌</div>
-                      <div v-if="activeGame.currentTrick" class="landlord-current-trick">
-                        <div class="landlord-trick-head">
-                          <strong>{{ activeGame.currentTrick.playerName }}</strong>
-                          <span>{{ activeGame.currentTrick.combination?.label }}</span>
-                        </div>
-                        <div class="landlord-card-row table">
-                          <span
-                            v-for="card in activeGame.currentTrick.cards"
-                            :key="card.id"
-                            class="landlord-card static"
-                            :class="{ red: isLandlordRedCard(card) }"
+                        <div v-if="canBidLandlord" class="landlord-bid-actions">
+                          <button
+                            v-for="score in landlordBidOptions"
+                            :key="score"
+                            class="secondary-btn"
+                            @click.stop="bidLandlordScore(score)"
                           >
-                            <span class="landlord-card-rank">{{ getLandlordCardLabel(card) }}</span>
-                            <small class="landlord-card-suit">{{ getLandlordCardSuitLabel(card) }}</small>
-                          </span>
+                            {{ score === 0 ? '不叫' : `${score} 分` }}
+                          </button>
                         </div>
                       </div>
-                      <div v-else class="game-empty">
-                        {{ activeGame.phase === 'bidding' ? '叫分完成后，地主会率先出牌。' : '等待当前轮次首家出牌。' }}
+
+                      <!-- 当前出牌 -->
+                      <div v-if="activeGame.phase === 'playing'" class="landlord-center-trick">
+                        <div v-if="activeGame.currentTrick" class="landlord-trick-content">
+                          <span class="landlord-trick-player">{{ activeGame.currentTrick.playerName }} · {{ activeGame.currentTrick.combination?.label }}</span>
+                          <div class="landlord-card-row table">
+                            <span
+                              v-for="card in activeGame.currentTrick.cards"
+                              :key="card.id"
+                              class="landlord-card mini static"
+                              :class="{ red: isLandlordRedCard(card) }"
+                            >
+                              <span class="landlord-card-rank">{{ getLandlordCardLabel(card) }}</span>
+                              <small class="landlord-card-suit">{{ getLandlordCardSuitLabel(card) }}</small>
+                            </span>
+                          </div>
+                        </div>
+                        <div v-else class="landlord-trick-empty">等待出牌</div>
                       </div>
+
+                      <!-- 游戏结束操作 -->
+                      <div v-if="activeGame.status === 'finished'" class="landlord-center-finish">
+                        <button v-if="canRematchGame" class="primary-btn compact" @click.stop="rematchGame">再来一局</button>
+                        <button v-if="canCloseActiveGame" class="ghost-btn" @click.stop="closeActiveGame">关闭游戏</button>
+                      </div>
+                    </div>
+
+                    <!-- 右侧对手 -->
+                    <div
+                      v-if="landlordOpponents[1]"
+                      class="landlord-opponent"
+                      :class="{ current: activeGame.currentTurnId === landlordOpponents[1].id, landlord: landlordOpponents[1].role === 'landlord' }"
+                    >
+                      <div class="landlord-opponent-avatar-wrap">
+                        <UserAvatar :avatar-id="getParticipantAvatarId(landlordOpponents[1].id)" :name="landlordOpponents[1].name" :size="48" />
+                        <span v-if="activeGame.currentTurnId === landlordOpponents[1].id" class="landlord-turn-dot"></span>
+                      </div>
+                      <strong class="landlord-opponent-name">{{ landlordOpponents[1].name }}</strong>
+                      <span class="landlord-opponent-role">{{ getLandlordPlayerRoleLabel(landlordOpponents[1]) }}</span>
+                      <em class="landlord-opponent-count">{{ landlordOpponents[1].cardCount }} 张</em>
                     </div>
                   </div>
 
-                  <div v-if="isLandlordParticipant" class="landlord-hand-panel">
-                    <div class="landlord-hand-header">
-                      <strong>我的手牌</strong>
-                      <span>{{ myLandlordHand.length }} 张</span>
-                    </div>
-                    <div class="landlord-card-row hand">
+                  <!-- 我的手牌 -->
+                  <div v-if="isLandlordParticipant" class="landlord-hand-area">
+                    <div class="landlord-hand-row">
                       <button
                         v-for="card in myLandlordHand"
                         :key="card.id"
@@ -616,53 +541,20 @@
                         <small class="landlord-card-suit">{{ getLandlordCardSuitLabel(card) }}</small>
                       </button>
                     </div>
-
-                    <div v-if="activeGame.phase === 'playing'" class="landlord-actions">
-                      <button
-                        class="primary-btn compact"
-                        :disabled="!canPlayLandlordCards"
-                        @click.stop="playSelectedLandlordCards"
-                      >
-                        出牌
-                      </button>
-                      <button
-                        class="ghost-btn"
-                        :disabled="!canPassLandlordTurn"
-                        @click.stop="passLandlordTurn"
-                      >
-                        不要
-                      </button>
-                      <button
-                        class="ghost-btn"
-                        :disabled="!selectedLandlordCardIds.length"
-                        @click.stop="clearSelectedLandlordCards"
-                      >
-                        清空选择
-                      </button>
+                    <div v-if="activeGame.phase === 'playing'" class="landlord-hand-actions">
+                      <button class="primary-btn compact" :disabled="!canPlayLandlordCards" @click.stop="playSelectedLandlordCards">出牌</button>
+                      <button class="ghost-btn" :disabled="!canPassLandlordTurn" @click.stop="passLandlordTurn">不要</button>
+                      <button class="ghost-btn" :disabled="!selectedLandlordCardIds.length" @click.stop="clearSelectedLandlordCards">清空</button>
                     </div>
                   </div>
-
-                  <div v-else class="game-empty">
-                    当前为观战视角，仅显示桌面牌和玩家剩余手牌数量。
-                  </div>
-
-                  <div class="gomoku-actions">
-                    <button
-                      v-if="activeGame.status === 'finished' && canRematchGame"
-                      class="primary-btn compact"
-                      @click.stop="rematchGame"
-                    >
-                      再来一局
-                    </button>
-                    <button
-                      v-if="activeGame.status === 'finished' && canCloseActiveGame"
-                      class="ghost-btn"
-                      @click.stop="closeActiveGame"
-                    >
-                      关闭游戏
-                    </button>
-                  </div>
+                  <div v-else class="game-empty">当前为观战视角，仅显示桌面牌和玩家剩余手牌数量。</div>
                 </div>
+              </div>
+              <div v-if="canShare" class="share-close-drawer">
+                <button type="button" class="share-close-trigger" aria-label="展开共享操作面板" @click.stop>
+                  &lt;
+                </button>
+                <button type="button" class="share-close-btn" @click.stop="closeGameStage">关闭共享</button>
               </div>
             </div>
           </template>
@@ -1042,22 +934,39 @@
 
         <div class="share-toolbar">
           <div class="share-toolbar-actions">
-            <button v-if="canShare" class="primary-btn file-share-btn" @click="chooseMedia">文件共享</button>
-            <button v-if="canShare" class="secondary-btn screen-share-btn" @click="startScreenShare">屏幕共享</button>
-            <button v-if="canShare" class="secondary-btn web-share-btn" @click="openWebpageShareDialog">网页共享</button>
-            <button v-if="canShare" class="secondary-btn live-share-btn" @click="openLivestreamDialog">直播共享</button>
-            <button v-if="canOpenGameMenu" class="secondary-btn game-menu-btn" :class="{ active: showGameMenu || activeGame || gameInvite }" @click="openGameMenu">
-              游戏共享
+            <button v-if="canShare" class="toolbar-btn file-share-btn" @click="chooseMedia">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 2v6h6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 18v-6M9 15l3-3 3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>文件共享</span>
+            </button>
+            <button v-if="canShare" class="toolbar-btn screen-share-btn" @click="startScreenShare">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 21h8M12 17v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              <span>屏幕共享</span>
+            </button>
+            <button v-if="canShare" class="toolbar-btn web-share-btn" @click="openWebpageShareDialog">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2Z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+              <span>网页共享</span>
+            </button>
+            <button v-if="canShare" class="toolbar-btn live-share-btn" @click="openLivestreamDialog">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 1l22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
+              <span>直播共享</span>
+            </button>
+            <button v-if="canOpenGameMenu" class="toolbar-btn game-menu-btn" :class="{ active: showGameMenu || activeGame || gameInvite }" @click="openGameMenu">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="16" cy="12" r="1.5" fill="currentColor"/></svg>
+              <span>游戏共享</span>
             </button>
             <button
               v-if="canRequestRemoteControl"
-              class="secondary-btn remote-req-btn"
+              class="toolbar-btn remote-req-btn"
               :disabled="!isConnected"
               @click="requestRemoteControl"
             >
-              申请控制 {{ activeShare?.ownerName || '共享者' }}
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 15l-2 5L9 9l11 4-5 2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M14.83 14.83L21 21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              <span>申请控制</span>
             </button>
-            <button v-if="isRemoteController" class="ghost-btn danger remote-end-btn" @click="releaseRemoteControl">结束远控</button>
+            <button v-if="isRemoteController" class="toolbar-btn danger remote-end-btn" @click="releaseRemoteControl">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 15l-2 5L9 9l11 4-5 2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><line x1="2" y1="2" x2="22" y2="22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              <span>结束远控</span>
+            </button>
           </div>
           <div class="share-toolbar-hint">{{ remoteControlHint }}</div>
         </div>
@@ -1077,14 +986,6 @@
               <svg v-if="memberGridCols === 2" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
               <svg v-else viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="8" rx="2"/><rect x="3" y="13" width="18" height="8" rx="2"/></svg>
             </button>
-          </div>
-          <div v-if="invitePicker.visible" class="participant-invite-banner">
-            <div class="participant-invite-copy">
-              <span class="participant-invite-kicker">Invite Mode</span>
-              <strong>{{ invitePickerTitle }}</strong>
-              <span>{{ invitePickerDescription }}</span>
-            </div>
-            <button type="button" class="tiny-btn" @click="closeInvitePicker">取消</button>
           </div>
           <div ref="memberGridRef" class="member-grid" :class="'cols-' + memberGridCols" :style="{ maxHeight: memberGridMaxHeight }">
             <div
@@ -1322,6 +1223,38 @@
         </div>
       </div>
     </div>
+
+    <div v-if="invitePicker.visible" class="modal-overlay" @click.self="closeInvitePicker">
+      <div class="modal-content invite-picker-dialog">
+        <div class="invite-picker-header">
+          <div>
+            <span class="invite-picker-kicker">选择成员</span>
+            <strong>{{ invitePickerTitle }}</strong>
+          </div>
+          <button type="button" class="modal-close" @click="closeInvitePicker">&times;</button>
+        </div>
+        <div class="invite-picker-body">
+          <div class="seat-picker-grid">
+            <button
+              v-for="peer in invitePickerPeers"
+              :key="peer.id"
+              type="button"
+              class="seat-picker-card"
+              @click.stop="selectPeerForInvite(peer)"
+            >
+              <UserAvatar :avatar-id="peer.avatarId" :name="peer.name" :size="42" />
+              <div class="seat-picker-copy">
+                <strong>{{ peer.name }}</strong>
+                <span>{{ isPeerConnected(peer.id) ? '在线' : '连接中' }}</span>
+              </div>
+            </button>
+          </div>
+          <div v-if="!invitePickerPeers.length" class="invite-picker-empty">
+            {{ invitePicker.gameType === 'landlord' ? '房间里至少需要 3 人在线，才能开始斗地主。' : '房间里还没有可邀请的其他成员。' }}
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1417,7 +1350,6 @@ const showGameMenu = ref(false)
 const gameInvite = ref(null)
 const activeGame = ref(null)
 const selectedGameType = ref('')
-const isLocalInviter = ref(false)
 const selectedGomokuInviteeId = ref('')
 const selectedLandlordInviteeIds = ref([])
 const selectedLandlordCardIds = ref([])
@@ -1707,13 +1639,13 @@ const isPendingInviteForMe = computed(() => myGameInviteEntry.value?.status === 
 const canCancelGameInvite = computed(() => {
   return Boolean(
     gameInvite.value
-    && (gameInvite.value.inviterId === selfId.value || isLocalInviter.value || myGameInviteEntry.value)
+    && (gameInvite.value.inviterId === selfId.value || myGameInviteEntry.value)
   )
 })
 const canForceStartGameInvite = computed(() => {
   return Boolean(
     gameInvite.value
-    && (gameInvite.value.inviterId === selfId.value || isLocalInviter.value)
+    && gameInvite.value.inviterId === selfId.value
   )
 })
 const canInviteGomoku = computed(() => {
@@ -1854,7 +1786,7 @@ const gameInviteBannerTitle = computed(() => {
     return `${gameInvite.value.inviterName} 邀请你加入一局${getGameTypeLabel(gameInvite.value.gameType)}`
   }
 
-  if (gameInvite.value.inviterId === selfId.value || isLocalInviter.value) {
+  if (gameInvite.value.inviterId === selfId.value) {
     return `已向 ${formatGameInviteeNames(gameInvitees.value)} 发起${getGameTypeLabel(gameInvite.value.gameType)}邀请`
   }
 
@@ -1967,6 +1899,9 @@ const gomokuStatusSubtext = computed(() => {
 const isLandlordGame = computed(() => activeGame.value?.gameType === 'landlord')
 const isLandlordParticipant = computed(() => {
   return Boolean(activeGame.value?.players?.some((player) => player.id === selfId.value))
+})
+const landlordOpponents = computed(() => {
+  return (activeGame.value?.players || []).filter((player) => player.id !== selfId.value)
 })
 const myLandlordHand = computed(() => {
   return isLandlordGame.value ? (activeGame.value.myHand || []) : []
@@ -2894,18 +2829,14 @@ function setGameInvite(nextInvite) {
   if (gameInvite.value) {
     showGameMenu.value = true
     closeInvitePicker()
-  } else {
-    isLocalInviter.value = false
-    if (!activeGame.value) {
-      selectedLandlordInviteeIds.value = []
-    }
+  } else if (!activeGame.value) {
+    selectedLandlordInviteeIds.value = []
   }
 }
 
 function setGameState(nextGameState) {
   activeGame.value = cloneGameState(nextGameState)
   if (activeGame.value) {
-    isLocalInviter.value = false
     showGameMenu.value = true
     closeInvitePicker()
   } else {
@@ -6129,7 +6060,6 @@ function inviteToGomoku(peer) {
     return
   }
 
-  isLocalInviter.value = true
   socket.value.emit('game-invite-send', {
     roomId: roomId.value,
     gameType: 'gomoku',
@@ -6142,12 +6072,39 @@ function inviteToLandlord() {
     return
   }
 
-  isLocalInviter.value = true
   socket.value.emit('game-invite-send', {
     roomId: roomId.value,
     gameType: 'landlord',
     inviteeIds: selectedLandlordPeers.value.map((peer) => peer.id)
   })
+}
+
+function startLandlordGame() {
+  if (!socket.value?.connected || !canInviteLandlord.value) {
+    return
+  }
+
+  let settled = false
+  const cleanup = () => {
+    settled = true
+    unwatch()
+  }
+
+  const unwatch = watch(gameInvite, (invite) => {
+    if (settled) return
+    if (invite && invite.inviterId === selfId.value) {
+      cleanup()
+      nextTick(() => {
+        forceStartGameInvite()
+      })
+    }
+  })
+
+  inviteToLandlord()
+
+  setTimeout(() => {
+    if (!settled) cleanup()
+  }, 8000)
 }
 
 function cancelGameInvite() {
@@ -8379,7 +8336,7 @@ onUnmounted(() => {
 }
 
 .shared-stage.game-mode {
-  height: clamp(580px, 83vh, 920px);
+  height: clamp(360px, 60vh, 560px);
   align-items: stretch;
   background:
     radial-gradient(circle at top, rgba(59, 130, 246, 0.08), transparent 34%),
@@ -8387,6 +8344,7 @@ onUnmounted(() => {
 }
 
 .game-stage {
+  position: relative;
   width: 100%;
   height: 100%;
   padding: 10px;
@@ -8397,26 +8355,10 @@ onUnmounted(() => {
 }
 
 .game-panel.in-match {
-  padding: 14px 14px 12px;
-  gap: 10px;
-}
-
-.game-panel.in-match .game-panel-hero {
-  padding: 14px 16px;
-  gap: 10px;
-  border-radius: 20px;
-  background:
-    linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(168, 85, 247, 0.08)),
-    rgba(255, 255, 255, 0.04);
-}
-
-.game-panel.in-match .game-panel-hero-copy strong {
-  margin-top: 6px;
-  font-size: clamp(20px, 2.2vw, 26px);
-}
-
-.game-panel.in-match .game-panel-hero-orbs {
-  display: none;
+  padding: 10px;
+  gap: 8px;
+  min-height: 0;
+  max-height: 100%;
 }
 
 .game-panel.in-match .game-panel-header {
@@ -8432,28 +8374,102 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 22px;
-  border: 1px solid rgba(167, 185, 210, 0.1);
-  background: rgba(255, 255, 255, 0.04);
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 18px;
+  border: 1px solid rgba(167, 185, 210, 0.08);
+  background: rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(12px);
 }
 
 .share-toolbar-actions {
   display: flex;
   flex-wrap: nowrap;
-  gap: 8px;
-}
-.share-toolbar-actions > * {
-  flex: 0 0 auto;
+  gap: 4px;
 }
 
 .share-toolbar-hint {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 11px;
   margin-left: auto;
   white-space: nowrap;
+}
+
+.toolbar-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(167, 185, 210, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.toolbar-btn svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(167, 185, 210, 0.18);
+  color: #f1f5f9;
+  transform: translateY(-1px);
+}
+
+.toolbar-btn:hover svg {
+  opacity: 1;
+}
+
+.toolbar-btn:active {
+  transform: translateY(0);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.toolbar-btn.active {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(96, 165, 250, 0.3);
+  color: #93c5fd;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.1);
+}
+
+.toolbar-btn.active svg {
+  opacity: 1;
+}
+
+.toolbar-btn.danger {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.16);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.toolbar-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(248, 113, 113, 0.28);
+  color: #fecaca;
+}
+
+.toolbar-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+  transform: none;
 }
 
 .share-content-frame {
@@ -9076,10 +9092,10 @@ onUnmounted(() => {
   background:
     radial-gradient(circle at top left, rgba(34, 197, 94, 0.08), transparent 28%),
     linear-gradient(180deg, rgba(8, 15, 28, 0.92), rgba(10, 20, 36, 0.82));
-  padding: 20px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
 }
 
 .game-panel::before {
@@ -9094,11 +9110,15 @@ onUnmounted(() => {
 
 .game-panel.stage-embedded {
   width: 100%;
-  min-height: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .game-panel.stage-embedded.in-match {
-  border-radius: 26px;
+  border-radius: 20px;
+  min-height: 0;
+  overflow: auto;
   border-color: rgba(96, 165, 250, 0.16);
   background:
     radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 26%),
@@ -9107,89 +9127,13 @@ onUnmounted(() => {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 24px 56px rgba(2, 6, 23, 0.26);
 }
 
-.game-panel-hero {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 18px 20px;
-  border-radius: 24px;
-  border: 1px solid rgba(167, 185, 210, 0.12);
-  background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(225, 29, 72, 0.08)),
-    rgba(255, 255, 255, 0.04);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-.game-panel-hero-copy {
-  max-width: 640px;
-}
-
-.game-panel-kicker {
-  display: inline-flex;
-  color: #93c5fd;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.game-panel-hero-copy strong {
-  display: block;
-  margin-top: 10px;
-  color: #ffffff;
-  font-family: var(--font-display);
-  font-size: clamp(24px, 2.6vw, 34px);
-  line-height: 1;
-  letter-spacing: -0.04em;
-}
-
-.game-panel-hero-copy p {
-  margin: 10px 0 0;
-  color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.7;
-}
-
-.game-panel-hero-orbs {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  align-self: flex-start;
-}
-
-.game-orb {
-  display: inline-block;
-  border-radius: 50%;
-  box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.03);
-}
-
-.game-orb.blue {
-  width: 14px;
-  height: 14px;
-  background: #60a5fa;
-}
-
-.game-orb.rose {
-  width: 24px;
-  height: 24px;
-  background: radial-gradient(circle at 32% 32%, #fda4af, #e11d48 72%);
-}
-
-.game-orb.gold {
-  width: 12px;
-  height: 12px;
-  background: #f59e0b;
-}
-
 .game-panel-header {
   position: relative;
   z-index: 1;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 10px;
 }
 
 .game-panel-header .panel-title {
@@ -9197,9 +9141,9 @@ onUnmounted(() => {
 }
 
 .game-panel-subtitle {
-  margin: 6px 0 0;
+  margin: 2px 0 0;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .game-panel-status {
@@ -9331,31 +9275,32 @@ onUnmounted(() => {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 6px;
 }
 
 .game-home-header {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 4px;
 }
 
 .game-home-back {
-  min-height: 40px;
-  padding: 0 14px;
+  min-height: 28px;
+  padding: 0 8px;
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   border: 1px solid rgba(167, 185, 210, 0.12);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
   color: #e2e8f0;
+  font-size: 11px;
 }
 
 .game-home-back svg {
-  width: 18px;
-  height: 18px;
+  width: 12px;
+  height: 12px;
   stroke: currentColor;
   fill: none;
   stroke-width: 1.9;
@@ -9366,20 +9311,20 @@ onUnmounted(() => {
 .game-home-hero {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 18px;
-  border-radius: 24px;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 14px;
   border: 1px solid rgba(167, 185, 210, 0.12);
   background: rgba(255, 255, 255, 0.05);
 }
 
 .game-home-icon {
   flex: 0 0 auto;
-  width: 84px;
-  height: 84px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
-  border-radius: 22px;
+  border-radius: 12px;
   border: 1px solid rgba(167, 185, 210, 0.12);
 }
 
@@ -9400,52 +9345,49 @@ onUnmounted(() => {
 .game-home-kicker {
   display: inline-flex;
   color: #93c5fd;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .game-home-title {
-  margin: 10px 0 0;
+  margin: 2px 0 0;
   color: #ffffff;
   font-family: var(--font-display);
-  font-size: clamp(24px, 2.4vw, 32px);
+  font-size: clamp(15px, 1.8vw, 20px);
   line-height: 1.02;
   letter-spacing: -0.04em;
 }
 
 .game-home-subtitle {
-  margin: 10px 0 0;
-  color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.7;
+  display: none;
 }
 
 .game-home-summary {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 18px;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 10px;
   background: rgba(8, 15, 28, 0.54);
   border: 1px solid rgba(167, 185, 210, 0.1);
 }
 
 .game-home-summary span {
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 10px;
 }
 
 .game-home-summary strong {
   color: #ffffff;
-  font-size: 14px;
+  font-size: 11px;
 }
 
 .game-seat-grid {
   display: grid;
-  gap: 12px;
+  gap: 6px;
 }
 
 .game-seat-grid.two-seat {
@@ -9457,14 +9399,14 @@ onUnmounted(() => {
 }
 
 .game-seat-card {
-  min-height: 168px;
+  min-height: 80px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: center;
   align-items: stretch;
-  gap: 16px;
-  padding: 18px;
-  border-radius: 22px;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 12px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03)),
     rgba(255, 255, 255, 0.03);
@@ -9509,32 +9451,32 @@ onUnmounted(() => {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
 }
 
 .game-seat-copy {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
 }
 
 .game-seat-copy strong {
   color: #ffffff;
-  font-size: 16px;
+  font-size: 13px;
 }
 
 .game-seat-copy span {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 10px;
 }
 
 .game-seat-plus {
-  width: 54px;
-  height: 54px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
-  border-radius: 18px;
+  border-radius: 12px;
   background: rgba(59, 130, 246, 0.14);
   border: 1px solid rgba(96, 165, 250, 0.16);
   color: #dbeafe;
@@ -9543,8 +9485,8 @@ onUnmounted(() => {
 .game-seat-plus svg,
 .seat-clear-btn svg,
 .seat-picker-close svg {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   stroke: currentColor;
   fill: none;
   stroke-width: 2;
@@ -9554,22 +9496,22 @@ onUnmounted(() => {
 
 .game-seat-card.invite-seat strong {
   color: #ffffff;
-  font-size: 16px;
+  font-size: 12px;
 }
 
 .game-seat-card.invite-seat span:last-child {
   color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 10px;
+  line-height: 1.4;
 }
 
 .seat-clear-btn {
-  width: 38px;
-  height: 38px;
-  align-self: flex-end;
+  width: 28px;
+  height: 28px;
+  align-self: center;
   display: grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid rgba(167, 185, 210, 0.12);
   background: rgba(255, 255, 255, 0.06);
   color: #e2e8f0;
@@ -9665,6 +9607,53 @@ onUnmounted(() => {
 .game-home-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.invite-picker-dialog {
+  max-width: 420px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.invite-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.invite-picker-kicker {
+  display: inline-flex;
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.invite-picker-header strong {
+  display: block;
+  margin-top: 8px;
+  color: #ffffff;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.invite-picker-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.invite-picker-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 0;
 }
 
 .game-catalog {
@@ -9876,9 +9865,8 @@ onUnmounted(() => {
   gap: 16px;
 }
 
-.game-panel.in-match .gomoku-section,
-.game-panel.in-match .landlord-section {
-  gap: 12px;
+.game-panel.in-match .gomoku-section {
+  gap: 6px;
 }
 
 @media (min-width: 1081px) {
@@ -9934,9 +9922,9 @@ onUnmounted(() => {
 }
 
 .game-panel.in-match .game-mode-banner {
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 20px;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 16px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
@@ -9962,9 +9950,9 @@ onUnmounted(() => {
 }
 
 .game-panel.in-match .game-mode-copy strong {
-  margin-top: 6px;
-  font-size: 16px;
-  line-height: 1.35;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.3;
 }
 
 .game-mode-badge {
@@ -9999,9 +9987,8 @@ onUnmounted(() => {
   align-items: center;
 }
 
-.game-panel.in-match .gomoku-header,
-.game-panel.in-match .landlord-header {
-  gap: 10px;
+.game-panel.in-match .gomoku-header {
+  gap: 6px;
 }
 
 .gomoku-player-card {
@@ -10015,9 +10002,9 @@ onUnmounted(() => {
 }
 
 .game-panel.in-match .gomoku-player-card {
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 16px;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 12px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04)),
     rgba(8, 15, 28, 0.56);
@@ -10044,11 +10031,11 @@ onUnmounted(() => {
 }
 
 .game-panel.in-match .gomoku-player-card strong {
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .game-panel.in-match .gomoku-player-card em {
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .gomoku-status {
@@ -10059,9 +10046,9 @@ onUnmounted(() => {
 }
 
 .game-panel.in-match .gomoku-status {
-  gap: 4px;
-  padding: 10px 12px;
-  border-radius: 16px;
+  gap: 3px;
+  padding: 6px 8px;
+  border-radius: 12px;
   background:
     radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 30%),
     rgba(255, 255, 255, 0.04);
@@ -10078,11 +10065,11 @@ onUnmounted(() => {
 }
 
 .game-panel.in-match .gomoku-status strong {
-  font-size: 15px;
+  font-size: 12px;
 }
 
 .game-panel.in-match .gomoku-status span {
-  font-size: 12px;
+  font-size: 10px;
 }
 
 .gomoku-board-wrap {
@@ -10118,14 +10105,14 @@ onUnmounted(() => {
 }
 
 .game-panel.in-match .gomoku-board-shell {
-  padding: 12px;
-  border-radius: 24px;
+  padding: 8px;
+  border-radius: 20px;
 }
 
 .game-panel.in-match .gomoku-board {
-  width: min(100%, 560px, calc(100vh - 250px));
-  padding: 20px;
-  border-radius: 28px;
+  width: min(100%, 400px, calc(100vh - 320px));
+  padding: 14px;
+  border-radius: 22px;
 }
 
 .gomoku-board {
@@ -10251,228 +10238,181 @@ onUnmounted(() => {
   gap: 10px;
 }
 
+/* ===== 斗地主牌桌布局 ===== */
+
 .landlord-section {
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  height: 100%;
+  gap: 4px;
+  padding: 4px 0;
 }
 
-.landlord-mode-banner {
-  background:
-    radial-gradient(circle at 100% 0%, rgba(249, 115, 22, 0.18), transparent 24%),
-    rgba(255, 255, 255, 0.05);
-}
-
-.landlord-header {
+.landlord-table-area {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
 }
 
-.landlord-player-card {
-  padding: 14px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(167, 185, 210, 0.12);
+/* 对手侧边栏 */
+.landlord-opponent {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 4px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(167, 185, 210, 0.08);
+  width: 80px;
 }
 
-.game-panel.in-match .landlord-player-card {
-  padding: 12px;
-  gap: 6px;
-  border-radius: 18px;
-}
-
-.landlord-player-card.current {
+.landlord-opponent.current {
   border-color: rgba(96, 165, 250, 0.28);
-  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.16), 0 16px 28px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.12);
 }
 
-.landlord-player-card.landlord {
-  background: linear-gradient(180deg, rgba(120, 53, 15, 0.34), rgba(15, 23, 42, 0.74));
-  border-color: rgba(251, 191, 36, 0.2);
+.landlord-opponent.landlord {
+  background: linear-gradient(180deg, rgba(120, 53, 15, 0.24), rgba(15, 23, 42, 0.5));
+  border-color: rgba(251, 191, 36, 0.16);
 }
 
-.landlord-player-card.self {
-  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.14);
+.landlord-opponent-avatar-wrap {
+  position: relative;
 }
 
-.landlord-player-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
+.landlord-turn-dot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #3b82f6;
+  border: 2px solid rgba(8, 15, 28, 0.9);
+  animation: pulse-dot 1.6s ease-in-out infinite;
 }
 
-.landlord-player-top strong {
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.landlord-opponent-name {
   color: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.landlord-player-identity {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.landlord-player-top span {
+.landlord-opponent-role {
   border-radius: 999px;
-  padding: 4px 8px;
+  padding: 1px 6px;
   background: rgba(8, 15, 28, 0.62);
   color: #dbeafe;
-  font-size: 12px;
+  font-size: 10px;
 }
 
-.game-panel.in-match .landlord-player-top span {
-  padding: 3px 7px;
-  font-size: 11px;
+.landlord-opponent.landlord .landlord-opponent-role {
+  background: rgba(251, 191, 36, 0.18);
+  color: #fde68a;
 }
 
-.landlord-player-card em {
+.landlord-opponent-count {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 11px;
   font-style: normal;
 }
 
-.game-panel.in-match .landlord-player-card em {
-  font-size: 11px;
-}
-
-.landlord-status-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-  padding: 16px;
-  border-radius: 20px;
-  background: rgba(8, 15, 28, 0.62);
-  border: 1px solid rgba(167, 185, 210, 0.12);
-}
-
-.game-panel.in-match .landlord-status-card {
-  gap: 12px;
-  padding: 14px;
-  border-radius: 18px;
-}
-
-.landlord-status-main {
+/* 中央牌桌 */
+.landlord-center {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-
-.game-panel.in-match .landlord-status-main {
   gap: 4px;
+  overflow: auto;
+  min-height: 0;
+  align-items: center;
+  padding: 4px;
 }
 
-.landlord-status-main strong {
+.landlord-center-status {
+  text-align: center;
+  padding: 2px 10px;
+}
+
+.landlord-center-status strong {
+  display: block;
   color: #f8fafc;
-}
-
-.landlord-status-main span {
-  color: var(--text-muted);
   font-size: 13px;
 }
 
-.game-panel.in-match .landlord-status-main strong {
-  font-size: 15px;
+.landlord-center-status span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-top: 1px;
 }
 
-.game-panel.in-match .landlord-status-main span {
-  font-size: 12px;
+/* 底牌行 */
+.landlord-bottom-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: rgba(8, 15, 28, 0.4);
 }
 
-.landlord-bottom-cards {
+.landlord-bottom-label {
+  color: var(--text-muted);
+  font-size: 10px;
+  margin-right: 2px;
+  white-space: nowrap;
+}
+
+/* 叫分区 */
+.landlord-center-bid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  align-items: flex-end;
-}
-
-.game-panel.in-match .landlord-bottom-cards {
-  gap: 6px;
-}
-
-.landlord-bottom-cards label {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.landlord-table-grid {
-  display: grid;
-  grid-template-columns: minmax(240px, 0.78fr) minmax(0, 1fr);
-  gap: 16px;
-}
-
-.game-panel.in-match .landlord-table-grid {
-  gap: 12px;
-}
-
-.landlord-bid-panel,
-.landlord-table-panel,
-.landlord-hand-panel {
-  border-radius: 20px;
-  padding: 16px;
-  background: rgba(8, 15, 28, 0.62);
-  border: 1px solid rgba(167, 185, 210, 0.12);
-}
-
-.game-panel.in-match .landlord-bid-panel,
-.game-panel.in-match .landlord-table-panel,
-.game-panel.in-match .landlord-hand-panel {
-  padding: 14px;
-  border-radius: 18px;
-}
-
-.landlord-panel-title {
-  color: #f8fafc;
-  font-size: 14px;
-  font-weight: 700;
-  margin-bottom: 12px;
-}
-
-.game-panel.in-match .landlord-panel-title {
-  margin-bottom: 10px;
-  font-size: 13px;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(8, 15, 28, 0.4);
+  border: 1px solid rgba(167, 185, 210, 0.08);
+  width: 100%;
+  max-width: 280px;
 }
 
 .landlord-bid-copy {
   color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.game-panel.in-match .landlord-bid-copy {
   font-size: 12px;
+  text-align: center;
 }
 
 .landlord-bid-history {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.game-panel.in-match .landlord-bid-history {
-  gap: 6px;
-  margin-top: 10px;
+  gap: 3px;
+  width: 100%;
 }
 
 .landlord-bid-history-item {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  font-size: 13px;
-}
-
-.game-panel.in-match .landlord-bid-history-item {
-  padding: 8px 10px;
-  font-size: 12px;
+  gap: 8px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 11px;
 }
 
 .landlord-bid-history-item span {
@@ -10487,89 +10427,93 @@ onUnmounted(() => {
 .landlord-bid-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 14px;
+  gap: 6px;
+  justify-content: center;
 }
 
-.game-panel.in-match .landlord-bid-actions {
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.landlord-current-trick {
+/* 当前出牌区 */
+.landlord-center-trick {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.game-panel.in-match .landlord-current-trick {
-  gap: 10px;
-}
-
-.landlord-trick-head {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(8, 15, 28, 0.4);
+  border: 1px solid rgba(167, 185, 210, 0.08);
+  width: 100%;
+  max-width: 280px;
 }
 
-.landlord-trick-head strong {
-  color: #f8fafc;
-}
-
-.landlord-trick-head span {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.landlord-hand-header {
+.landlord-trick-content {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 4px;
 }
 
-.game-panel.in-match .landlord-hand-header {
-  margin-bottom: 10px;
-}
-
-.landlord-hand-header strong {
-  color: #f8fafc;
-}
-
-.landlord-hand-header span {
+.landlord-trick-player {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
+.landlord-trick-empty {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: center;
+  padding: 8px 0;
+}
+
+/* 游戏结束 */
+.landlord-center-finish {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+/* 手牌区 */
+.landlord-hand-area {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.landlord-hand-row {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.landlord-hand-actions {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+/* 扑克牌 */
 .landlord-card-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-}
-
-.game-panel.in-match .landlord-card-row {
-  gap: 8px;
+  gap: 3px;
+  justify-content: center;
 }
 
 .landlord-card-row.table {
   align-items: center;
 }
 
-.landlord-card-row.hand {
-  align-items: flex-end;
-  padding-top: 10px;
-}
-
 .landlord-card {
-  width: 60px;
-  min-height: 86px;
-  border-radius: 14px;
+  width: 38px;
+  min-height: 52px;
+  border-radius: 8px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(226, 232, 240, 0.92));
   color: #0f172a;
-  padding: 10px 8px;
+  padding: 4px 3px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -10577,11 +10521,12 @@ onUnmounted(() => {
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
 }
 
-.game-panel.in-match .landlord-card {
-  width: 56px;
-  min-height: 80px;
-  padding: 8px 7px;
-  border-radius: 12px;
+.landlord-card.mini {
+  width: 30px;
+  min-height: 42px;
+  padding: 3px 2px;
+  border-radius: 6px;
+  cursor: default;
 }
 
 .landlord-card:not(.static) {
@@ -10589,9 +10534,9 @@ onUnmounted(() => {
 }
 
 .landlord-card:not(.static):hover {
-  transform: translateY(-6px);
+  transform: translateY(-4px);
   border-color: rgba(96, 165, 250, 0.5);
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.2);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.2);
 }
 
 .landlord-card.static {
@@ -10603,50 +10548,35 @@ onUnmounted(() => {
 }
 
 .landlord-card.selected {
-  transform: translateY(-12px);
+  transform: translateY(-8px);
   border-color: rgba(96, 165, 250, 0.68);
-  box-shadow: 0 16px 32px rgba(37, 99, 235, 0.18);
-}
-
-.game-panel.in-match .landlord-card.selected {
-  transform: translateY(-10px);
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.18);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(219, 234, 254, 0.96));
 }
 
 .landlord-card.disabled {
   cursor: default;
-  opacity: 0.82;
-}
-
-.landlord-card.disabled:hover {
-  transform: none;
-  border-color: rgba(148, 163, 184, 0.22);
-  box-shadow: none;
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .landlord-card-rank {
-  font-size: 20px;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1;
 }
 
-.game-panel.in-match .landlord-card-rank {
-  font-size: 18px;
+.landlord-card.mini .landlord-card-rank {
+  font-size: 11px;
 }
 
 .landlord-card-suit {
-  font-size: 11px;
+  font-size: 9px;
   opacity: 0.7;
 }
 
-.game-panel.in-match .landlord-card-suit {
-  font-size: 10px;
-}
-
-.landlord-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 14px;
+.landlord-card.mini .landlord-card-suit {
+  font-size: 8px;
 }
 
 .video-grid {
@@ -11393,7 +11323,7 @@ onUnmounted(() => {
 
 @media (max-height: 900px) {
   .shared-stage.game-mode {
-    height: clamp(540px, 83vh, 800px);
+    height: clamp(360px, 60vh, 560px);
   }
 
   .game-stage {
@@ -11401,17 +11331,12 @@ onUnmounted(() => {
   }
 
   .game-panel.in-match {
-    padding: 14px;
-    gap: 10px;
-  }
-
-  .game-panel.in-match .game-panel-hero,
-  .game-panel.in-match .game-mode-banner {
-    padding: 10px 12px;
+    padding: 8px;
+    gap: 6px;
   }
 
   .game-panel.in-match .gomoku-board-shell {
-    padding: 10px;
+    padding: 6px;
   }
 }
 
@@ -11428,7 +11353,6 @@ onUnmounted(() => {
     box-shadow: none;
   }
 
-  .game-panel-hero,
   .game-mode-banner,
   .game-home-hero,
   .game-home-summary {
@@ -11445,10 +11369,7 @@ onUnmounted(() => {
   }
 
   .game-card,
-  .gomoku-header,
-  .landlord-header,
-  .landlord-table-grid,
-  .landlord-status-card {
+  .gomoku-header {
     grid-template-columns: 1fr;
   }
 
@@ -11506,27 +11427,27 @@ onUnmounted(() => {
   }
 
   .shared-stage.game-mode {
-    height: clamp(420px, 72vh, 620px);
+    height: clamp(240px, 60vw, 360px);
   }
 
   .share-toolbar {
-    padding: 10px 12px;
-    border-radius: 18px;
+    padding: 6px 8px;
+    border-radius: 14px;
   }
 
   .share-toolbar-actions {
-    gap: 6px;
+    gap: 3px;
   }
 
   .share-actions,
   .game-home-actions,
-  .landlord-actions {
+  .landlord-hand-actions {
     width: 100%;
   }
 
   .share-actions > *,
   .game-home-actions > *,
-  .landlord-actions > * {
+  .landlord-hand-actions > * {
     flex: 1 1 160px;
   }
 
@@ -11537,6 +11458,7 @@ onUnmounted(() => {
   .primary-btn,
   .secondary-btn,
   .ghost-btn,
+  .toolbar-btn,
   .leave-btn,
   .device-toggle,
   .chat-send-btn,
@@ -11592,20 +11514,23 @@ onUnmounted(() => {
     width: 100%;
   }
 
-  .landlord-player-top,
-  .landlord-trick-head {
-    flex-direction: column;
-    align-items: flex-start;
+  .landlord-card {
+    width: 34px;
+    min-height: 48px;
+    padding: 3px 2px;
   }
 
-  .landlord-card {
-    width: 52px;
-    min-height: 76px;
-    padding: 8px 7px;
+  .landlord-card.mini {
+    width: 26px;
+    min-height: 36px;
   }
 
   .landlord-card-rank {
-    font-size: 18px;
+    font-size: 12px;
+  }
+
+  .landlord-card.mini .landlord-card-rank {
+    font-size: 10px;
   }
 
   .gomoku-board {
@@ -11666,12 +11591,24 @@ onUnmounted(() => {
   }
 
   .share-toolbar {
-    padding: 10px;
-    border-radius: 16px;
+    padding: 6px;
+    border-radius: 12px;
   }
 
-  .share-toolbar-actions > * {
-    flex: 0 0 auto;
+  .share-toolbar-actions {
+    gap: 2px;
+  }
+
+  .toolbar-btn {
+    min-height: 32px;
+    padding: 0 8px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .toolbar-btn svg {
+    width: 14px;
+    height: 14px;
   }
 
   .share-actions > * {
