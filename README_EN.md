@@ -43,11 +43,20 @@ npm run start
 
 ### One-Click Deployment
 
+**Requirements:** Linux (apt-based distro) · Node.js >= 16 · npm · Domain name (optional, for Nginx + HTTPS)
+
 ```bash
 npm run install-all   # Interactive setup (Nginx / HTTPS / Let's Encrypt)
 npm run start-all     # Start
 npm run stop-all      # Stop
 ```
+
+The script will guide you through:
+1. Installing frontend & backend dependencies
+2. Asking whether to configure a domain (enter a domain already resolved to your server)
+3. Asking whether to enable HTTPS (auto-installs certbot for Let's Encrypt certificates)
+4. Configuring app port (default 3002), Nginx reverse proxy & SSL
+5. Falling back to port 8443 if port 443 is occupied
 
 ## Screenshots
 

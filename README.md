@@ -43,11 +43,20 @@ npm run start
 
 ### 一键部署
 
+**环境要求：** Linux（apt 系发行版） · Node.js >= 16 · npm · 域名（可选，用于 Nginx + HTTPS）
+
 ```bash
 npm run install-all   # 交互式配置（支持 Nginx / HTTPS / Let's Encrypt）
 npm run start-all     # 启动
 npm run stop-all      # 停止
 ```
+
+脚本会依次引导：
+1. 安装前端 & 后端依赖
+2. 询问是否配置域名（输入已解析到服务器的域名）
+3. 询问是否启用 HTTPS（自动安装 certbot 申请 Let's Encrypt 证书）
+4. 配置应用端口（默认 3002）、Nginx 反向代理 & SSL
+5. 若 443 端口被占用，自动回退到 8443
 
 ## 功能展示
 
