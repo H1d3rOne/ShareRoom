@@ -695,8 +695,6 @@ const getRoom = (roomId) => {
       superAdminClientId: null,
       adminSocketIds: new Set(),
       adminClientIds: new Set(),
-      controllerSocketId: null,
-      controllerTargetSocketId: null,
       gameInvite: null,
       gameState: null
     })
@@ -716,8 +714,7 @@ const serializeParticipants = (room) => (
     name: participant.name,
     avatarId: participant.avatarId || '',
     isSuperAdmin: isSuperAdminSocket(room, participant.id),
-    isAdmin: isAdminSocket(room, participant.id),
-    isController: participant.id === room.controllerSocketId
+    isAdmin: isAdminSocket(room, participant.id)
   }))
 )
 
@@ -727,8 +724,6 @@ const serializeRoom = (room, viewerId = '') => ({
   superAdminSocketId: room.superAdminSocketId,
   superAdminClientId: room.superAdminClientId,
   adminSocketIds: Array.from(room.adminSocketIds),
-  controllerSocketId: room.controllerSocketId,
-  controllerTargetSocketId: room.controllerTargetSocketId,
   gameInvite: serializeGameInvite(room.gameInvite),
   gameState: serializeGameState(room.gameState, viewerId)
 })
@@ -756,9 +751,7 @@ const broadcastParticipants = (roomId, room) => {
   io.to(roomId).emit('participants-changed', {
     participants: serializeParticipants(room),
     superAdminSocketId: room.superAdminSocketId,
-    adminSocketIds: Array.from(room.adminSocketIds),
-    controllerSocketId: room.controllerSocketId,
-    controllerTargetSocketId: room.controllerTargetSocketId
+    adminSocketIds: Array.from(room.adminSocketIds)
   })
 }
 
@@ -809,27 +802,12 @@ const removeAdminRole = (room, socketId, clientId, options = {}) => {
 
 const hasAnyAdminLeft = (room) => Boolean(room.superAdminSocketId || room.adminSocketIds.size > 0)
 
-const setController = (room, participant, targetParticipant = null) => {
-  room.controllerSocketId = participant?.id || null
-  room.controllerTargetSocketId = participant ? (targetParticipant?.id || null) : null
-  return participant || null
-}
-
 const notifyAdminChanged = (roomId, participant) => {
   io.to(roomId).emit('admin-changed', {
     adminId: participant?.id || null,
     adminName: participant?.name || null,
     superAdminId: participant?.id || null,
     superAdminName: participant?.name || null
-  })
-}
-
-const notifyRemoteControlChanged = (roomId, participant, targetParticipant = null) => {
-  io.to(roomId).emit('remote-control-changed', {
-    controllerId: participant?.id || null,
-    controllerName: participant?.name || null,
-    targetId: targetParticipant?.id || null,
-    targetName: targetParticipant?.name || null
   })
 }
 
@@ -898,8 +876,6 @@ const leaveCurrentRoom = (socket, options = {}) => {
 
   const wasSuperAdmin = room.superAdminSocketId === socket.id
   const wasAdmin = room.adminSocketIds.has(socket.id)
-  const wasController = room.controllerSocketId === socket.id
-  const wasControllerTarget = room.controllerTargetSocketId === socket.id
   room.participants.delete(socket.id)
 
   if (announce) {
@@ -932,11 +908,6 @@ const leaveCurrentRoom = (socket, options = {}) => {
     rooms.delete(roomId)
     socketSessions.delete(socket.id)
     return
-  }
-
-  if (wasController || wasControllerTarget) {
-    setController(room, null, null)
-    notifyRemoteControlChanged(roomId, null, null)
   }
 
   if (
@@ -1440,8 +1411,7 @@ io.on('connection', (socket) => {
         name: userName,
         avatarId,
         isSuperAdmin: room.superAdminSocketId === socket.id,
-        isAdmin: isAdminSocket(room, socket.id),
-        isController: room.controllerSocketId === socket.id
+        isAdmin: isAdminSocket(room, socket.id)
       }
     })
 
@@ -1515,11 +1485,6 @@ io.on('connection', (socket) => {
     room.adminSocketIds.delete(targetParticipant.id)
     if (targetParticipant.clientId) {
       room.adminClientIds.delete(targetParticipant.clientId)
-    }
-
-    if (room.controllerSocketId === targetParticipant.id) {
-      setController(room, null, null)
-      notifyRemoteControlChanged(session.roomId, null, null)
     }
 
     if (room.sharedMedia?.kind === 'video' && room.sharedMedia.sync?.controllerId === targetParticipant.id) {
@@ -2207,93 +2172,6 @@ io.on('connection', (socket) => {
     }
   })
 
-  socket.on('remote-control-request', (payload = {}) => {
-    const session = socketSessions.get(socket.id)
-    if (!session?.roomId || session.roomId !== payload.roomId) {
-      return
-    }
-
-    const room = rooms.get(payload.roomId)
-    const targetId = `${payload.targetId || room?.sharedMedia?.ownerId || ''}`.trim()
-    if (!room || !targetId || targetId === socket.id) {
-      return
-    }
-
-    if (!room.sharedMedia || room.sharedMedia.kind !== 'screen' || room.sharedMedia.ownerId !== targetId) {
-      return
-    }
-
-    const targetParticipant = room.participants.get(targetId)
-    if (!targetParticipant) {
-      return
-    }
-
-    io.to(targetParticipant.id).emit('remote-control-requested', {
-      requesterId: socket.id,
-      requesterName: session.userName,
-      targetId: targetParticipant.id,
-      targetName: targetParticipant.name
-    })
-  })
-
-  socket.on('remote-control-set', (payload = {}) => {
-    const session = socketSessions.get(socket.id)
-    if (!session?.roomId || session.roomId !== payload.roomId) {
-      return
-    }
-
-    const room = rooms.get(payload.roomId)
-    if (!room) {
-      return
-    }
-
-    const targetId = `${payload.targetId || room.sharedMedia?.ownerId || room.controllerTargetSocketId || ''}`.trim()
-    if (!targetId || targetId !== socket.id) {
-      return
-    }
-
-    if (!room.sharedMedia || room.sharedMedia.kind !== 'screen' || room.sharedMedia.ownerId !== targetId) {
-      return
-    }
-
-    const targetParticipant = room.participants.get(targetId)
-    if (!targetParticipant) {
-      return
-    }
-
-    const nextController = payload.controllerId
-      ? room.participants.get(payload.controllerId) || null
-      : null
-
-    if (nextController?.id === targetParticipant.id) {
-      return
-    }
-
-    setController(room, nextController, nextController ? targetParticipant : null)
-    notifyRemoteControlChanged(payload.roomId, nextController, nextController ? targetParticipant : null)
-    broadcastParticipants(payload.roomId, room)
-  })
-
-  socket.on('remote-control-release', (payload = {}) => {
-    const session = socketSessions.get(socket.id)
-    if (!session?.roomId || session.roomId !== payload.roomId) {
-      return
-    }
-
-    const room = rooms.get(payload.roomId)
-    if (!room) {
-      return
-    }
-
-    if (room.controllerTargetSocketId !== socket.id && room.controllerSocketId !== socket.id) {
-      return
-    }
-
-    setController(room, null, null)
-    notifyRemoteControlChanged(payload.roomId, null, null)
-    broadcastParticipants(payload.roomId, room)
-  })
-
   socket.on('share-start', (payload = {}) => {
     const session = socketSessions.get(socket.id)
     if (!session?.roomId || session.roomId !== payload.roomId || !payload.media?.id) {
@@ -2356,12 +2234,6 @@ io.on('connection', (socket) => {
         : null
     }
 
-    if (room.controllerSocketId || room.controllerTargetSocketId) {
-      setController(room, null, null)
-      notifyRemoteControlChanged(payload.roomId, null, null)
-      broadcastParticipants(payload.roomId, room)
-    }
-
     room.sharedMedia = sharedMedia
 
     socket.to(payload.roomId).emit('share-started', {
@@ -2382,11 +2254,10 @@ io.on('connection', (socket) => {
 
     const canControl = isAdminSocket(room, socket.id)
       || room.sharedMedia.ownerId === socket.id
-      || room.controllerSocketId === socket.id
     if (!canControl) {
       socket.emit('permission-denied', {
         action: 'share-control',
-        message: '只有共享者或已授权的远控成员可以控制共享内容'
+        message: '只有共享者或管理员可以控制共享内容'
       })
       return
     }
@@ -2438,7 +2309,7 @@ io.on('connection', (socket) => {
       return
     }
 
-    const canControl = room.sharedMedia.ownerId === socket.id || room.controllerSocketId === socket.id
+    const canControl = room.sharedMedia.ownerId === socket.id
     if (!canControl) {
       return
     }
@@ -2454,51 +2325,6 @@ io.on('connection', (socket) => {
       senderId: socket.id,
       senderName: session.userName,
       pointer: room.sharedMedia.pointer
-    })
-  })
-
-  socket.on('remote-control-command', (payload = {}) => {
-    const session = socketSessions.get(socket.id)
-    if (!session?.roomId || session.roomId !== payload.roomId) {
-      return
-    }
-
-    const room = rooms.get(payload.roomId)
-    if (
-      !room?.sharedMedia
-      || room.sharedMedia.id !== payload.mediaId
-      || room.sharedMedia.kind !== 'screen'
-      || room.controllerSocketId !== socket.id
-      || !room.controllerTargetSocketId
-      || room.sharedMedia.ownerId !== room.controllerTargetSocketId
-    ) {
-      return
-    }
-
-    const type = `${payload.command?.type || ''}`.trim()
-    if (!['click', 'double-click', 'contextmenu', 'wheel', 'keydown'].includes(type)) {
-      return
-    }
-
-    const command = {
-      type,
-      x: Number.isFinite(Number(payload.command?.x)) ? Number(payload.command.x) : null,
-      y: Number.isFinite(Number(payload.command?.y)) ? Number(payload.command.y) : null,
-      deltaX: Number.isFinite(Number(payload.command?.deltaX)) ? Number(payload.command.deltaX) : 0,
-      deltaY: Number.isFinite(Number(payload.command?.deltaY)) ? Number(payload.command.deltaY) : 0,
-      key: typeof payload.command?.key === 'string' ? payload.command.key.slice(0, 32) : '',
-      code: typeof payload.command?.code === 'string' ? payload.command.code.slice(0, 64) : '',
-      ctrlKey: Boolean(payload.command?.ctrlKey),
-      shiftKey: Boolean(payload.command?.shiftKey),
-      altKey: Boolean(payload.command?.altKey),
-      metaKey: Boolean(payload.command?.metaKey)
-    }
-
-    io.to(room.controllerTargetSocketId).emit('remote-control-command', {
-      mediaId: payload.mediaId,
-      senderId: socket.id,
-      senderName: session.userName,
-      command
     })
   })
 
@@ -2526,11 +2352,6 @@ io.on('connection', (socket) => {
     }
 
     room.sharedMedia = null
-    if (room.controllerSocketId || room.controllerTargetSocketId) {
-      setController(room, null, null)
-      notifyRemoteControlChanged(payload.roomId, null, null)
-      broadcastParticipants(payload.roomId, room)
-    }
 
     io.to(payload.roomId).emit('share-closed', {
       mediaId: payload.mediaId,

@@ -8,7 +8,6 @@
     "start": "node server/server.js",
     "serve": "npm run build && npm run start",
     "server": "node server/server.js",
-    "remote-agent": "python3 agent/remote_control_agent.py",
     "build": "vite build",
     "preview": "vite preview",
     "start-all": "./start.sh",

@@ -66,7 +66,7 @@
           <div
             ref="sharedStageRef"
             class="shared-stage"
-            :class="{ empty: !activeShare && !showGameStage, controllable: canSendRemoteControlCommands && !showGameStage, 'game-mode': showGameStage }"
+            :class="{ empty: !activeShare && !showGameStage, 'game-mode': showGameStage }"
             tabindex="0"
             @mousemove="handleSharedStagePointerMove"
             @mouseleave="handleSharedStagePointerLeave"
@@ -566,7 +566,7 @@
                 v-if="activeShare.kind === 'image' && activeShare.url"
                 :src="activeShare.url"
                 class="shared-image"
-                :class="{ zoomed: activeShare.zoomed, readonly: !canControlShare }"
+                :class="{ zoomed: activeShare.zoomed }"
                 style="display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain;"
                 @click="toggleSharedImageZoom"
               />
@@ -837,15 +837,6 @@
               <span class="remote-pointer-label">{{ activeShare.pointer.name || '远控指针' }}</span>
             </div>
 
-            <div
-              v-if="activeShare.kind === 'screen' && remoteCommandOverlay.visible"
-              class="remote-command-overlay"
-              :style="getRemotePointerStyle(remoteCommandOverlay)"
-            >
-              <span class="remote-command-pulse"></span>
-              <span class="remote-command-label">{{ remoteCommandOverlay.label }}</span>
-            </div>
-
             <div v-if="activeShare && canShare" class="share-close-drawer">
               <button type="button" class="share-close-trigger" aria-label="展开共享操作面板" @click.stop>
                 &lt;
@@ -954,21 +945,7 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="16" cy="12" r="1.5" fill="currentColor"/></svg>
               <span>游戏共享</span>
             </button>
-            <button
-              v-if="canRequestRemoteControl"
-              class="toolbar-btn remote-req-btn"
-              :disabled="!isConnected"
-              @click="requestRemoteControl"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 15l-2 5L9 9l11 4-5 2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M14.83 14.83L21 21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-              <span>申请控制</span>
-            </button>
-            <button v-if="isRemoteController" class="toolbar-btn danger remote-end-btn" @click="releaseRemoteControl">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 15l-2 5L9 9l11 4-5 2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><line x1="2" y1="2" x2="22" y2="22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-              <span>结束远控</span>
-            </button>
           </div>
-          <div class="share-toolbar-hint">{{ remoteControlHint }}</div>
         </div>
         </div>
 
@@ -1008,10 +985,9 @@
                   <path d="M12 18v3" />
                 </svg>
               </div>
-              <div class="member-badge" v-if="peer.isSuperAdmin || peer.isAdmin || peer.isController || getParticipantSeatLabel(peer.id)">
+              <div class="member-badge" v-if="peer.isSuperAdmin || peer.isAdmin || getParticipantSeatLabel(peer.id)">
                 <span v-if="peer.isSuperAdmin" class="member-badge-tag super">超管</span>
                 <span v-else-if="peer.isAdmin" class="member-badge-tag admin">管理</span>
-                <span v-if="peer.isController" class="member-badge-tag ctrl">远控</span>
                 <span v-if="getParticipantSeatLabel(peer.id)" class="member-badge-tag seat">{{ getParticipantSeatLabel(peer.id) }}</span>
               </div>
               <button
@@ -1050,23 +1026,6 @@
                   @click="revokeAdminFrom(peer); openMemberMenuId = ''"
                 >
                   撤销管理员
-                </button>
-                <button
-                  v-if="canManagePeerRemoteControl(peer)"
-                  type="button"
-                  class="member-dropdown-item"
-                  :class="{ danger: peer.isController }"
-                  @click="togglePeerRemoteControl(peer); openMemberMenuId = ''"
-                >
-                  {{ peer.isController ? '撤销远控' : '授权远控' }}
-                </button>
-                <button
-                  v-else-if="canRequestPeerRemoteControl(peer)"
-                  type="button"
-                  class="member-dropdown-item"
-                  @click="requestRemoteControl(peer.id); openMemberMenuId = ''"
-                >
-                  申请远控
                 </button>
               </div>
               <div class="member-name">
@@ -1341,8 +1300,6 @@ const currentLivestreamUrl = ref('')
 const lastRemotePointerSentAt = ref(0)
 const sharedOutgoingStream = ref(null)
 const sharedIncomingStream = ref(null)
-const remoteControlTargetId = ref('')
-const remoteControlAgentStatus = ref('unknown')
 const livekitPublisherSession = createLivekitShareSession()
 const livekitSubscriberSession = createLivekitShareSession()
 const realtimeShareConfig = reactive({ loaded: false, enabled: false, url: '', message: '' })
@@ -1358,14 +1315,6 @@ const invitePicker = reactive({
   gameType: '',
   slotIndex: -1
 })
-const remoteCommandOverlay = reactive({
-  visible: false,
-  label: '',
-  x: 0.5,
-  y: 0.5
-})
-let remoteCommandOverlayTimer = null
-let hasShownRemoteAgentHint = false
 
 const peerConnections = reactive({})
 const dataChannels = reactive({})
@@ -1429,7 +1378,6 @@ const GOMOKU_BOARD_SIZE = 15
 const LANDLORD_REQUIRED_PLAYERS = 3
 const LANDLORD_INVITEE_COUNT = LANDLORD_REQUIRED_PLAYERS - 1
 const SIGNAL_SERVER_URL = resolveSignalServerUrl()
-const REMOTE_CONTROL_AGENT_URL = resolveRemoteControlAgentUrl()
 
 const userCount = computed(() => participants.value.length)
 const selfParticipant = computed(() => {
@@ -1444,8 +1392,6 @@ const otherParticipants = computed(() => participants.value.filter((peer) => pee
 const isSuperAdmin = computed(() => participants.value.find((peer) => peer.id === selfId.value)?.isSuperAdmin || false)
 const isAdmin = computed(() => participants.value.find((peer) => peer.id === selfId.value)?.isAdmin || false)
 const canGrantAdmin = computed(() => isConnected.value && isSuperAdmin.value)
-const isRemoteController = computed(() => participants.value.find((peer) => peer.id === selfId.value)?.isController || false)
-const isRemoteControlTarget = computed(() => remoteControlTargetId.value === selfId.value)
 const hasLocalVideo = computed(() => hasLiveVideoTrack(localMediaStream.value))
 const participantsWithVideo = computed(() => {
   return otherParticipants.value.filter((peer) => {
@@ -1473,7 +1419,7 @@ const canStepBackwardSharedWebpage = computed(() => canControlSharedWebpage.valu
 const canStepForwardSharedWebpage = computed(() => canControlSharedWebpage.value && getWebpageHistoryEntries(activeShare.value).length > 1)
 const canLocalControlSharedVideo = computed(() => Boolean(activeShare.value && (activeShare.value.kind === 'video' || activeShare.value.kind === 'livestream') && isConnected.value))
 const canLocalControlSharedAudio = computed(() => Boolean(activeShare.value && activeShare.value.kind === 'audio' && isConnected.value))
-const canControlShare = computed(() => isConnected.value && (isShareOwner.value || isRemoteController.value))
+const canControlShare = computed(() => isConnected.value && isShareOwner.value)
 const canManageSharedMedia = computed(() => isConnected.value && (canControlShare.value || isAdmin.value))
 const canCloseGameStage = computed(() => Boolean(canShare.value && (showGameMenu.value || activeGame.value || gameInvite.value)))
 const isValidWebpageUrl = computed(() => {
@@ -1521,62 +1467,6 @@ const isValidLivestreamUrl = computed(() => {
   } catch {
     return false
   }
-})
-const remoteControllerName = computed(() => participants.value.find((peer) => peer.isController)?.name || '')
-const remoteControlTargetName = computed(() => participants.value.find((peer) => peer.id === remoteControlTargetId.value)?.name || '')
-const canRequestRemoteControl = computed(() => {
-  return Boolean(
-    isConnected.value
-    && isSharingScreen.value
-    && activeShare.value?.ownerId
-    && activeShare.value.ownerId !== selfId.value
-    && !isRemoteController.value
-  )
-})
-const canSendRemoteControlCommands = computed(() => {
-  return Boolean(
-    isConnected.value
-    && isRemoteController.value
-    && isSharingScreen.value
-    && activeShare.value?.ownerId
-    && activeShare.value.ownerId !== selfId.value
-    && remoteControlTargetId.value === activeShare.value.ownerId
-  )
-})
-const remoteControlHint = computed(() => {
-  if (isShareOwner.value && isSharingScreen.value) {
-    if (remoteControlAgentStatus.value !== 'ready') {
-      return '当前屏幕共享已开启，但共享方本机还没有启动远控执行端，暂时只能看到远控申请。'
-    }
-
-    return remoteControllerName.value
-      ? `${remoteControllerName.value} 正在远控你的屏幕，可在成员列表中撤销。`
-      : '成员可对当前共享屏幕申请远控，需你确认后才会生效。'
-  }
-
-  if (isAdmin.value) {
-    return remoteControllerName.value
-      ? `当前远控成员：${remoteControllerName.value}`
-      : '你可以共享文件/屏幕，并给成员授权远程控制共享区。'
-  }
-
-  if (isRemoteController.value) {
-    return remoteControlTargetName.value
-      ? `你正在远控 ${remoteControlTargetName.value} 的共享屏幕，可点击、滚轮和键盘操作共享区。`
-      : '你当前拥有远控权限，可控制图片/视频，并在屏幕共享上发送远控指针。'
-  }
-
-  if (isRemoteControlTarget.value) {
-    return remoteControllerName.value
-      ? `${remoteControllerName.value} 已接入你的共享屏幕远控。`
-      : '等待远控成员接入。'
-  }
-
-  if (canRequestRemoteControl.value && activeShare.value?.ownerName) {
-    return `当前正在共享 ${activeShare.value.ownerName} 的屏幕，可申请远控。`
-  }
-
-  return '只有房主可以发起共享；当前仅支持对正在共享屏幕的成员申请远控。'
 })
 
 function getMeshVideoQualityProfile(peerCount = otherParticipants.value.length) {
@@ -2023,9 +1913,7 @@ const shareStatusText = computed(() => {
   }
 
   if (share.kind === 'screen') {
-    return remoteControllerName.value
-      ? `正在实时共享屏幕，${remoteControllerName.value} 可远控`
-      : '正在实时共享屏幕'
+    return '正在实时共享屏幕'
   }
 
   if (share.ownerId === selfId.value && otherParticipants.value.length > 0) {
@@ -2052,14 +1940,6 @@ function resolveSignalServerUrl() {
     return window.location.origin
   }
   return window.location.origin
-}
-
-function resolveRemoteControlAgentUrl() {
-  if (import.meta.env.VITE_REMOTE_CONTROL_AGENT_URL) {
-    return import.meta.env.VITE_REMOTE_CONTROL_AGENT_URL
-  }
-
-  return 'http://127.0.0.1:7788'
 }
 
 function getRememberedAdminRooms() {
@@ -2678,64 +2558,6 @@ function getRemotePointerStyle(pointer) {
   }
 }
 
-function clearRemoteCommandOverlay() {
-  remoteCommandOverlay.visible = false
-  remoteCommandOverlay.label = ''
-
-  if (remoteCommandOverlayTimer) {
-    clearTimeout(remoteCommandOverlayTimer)
-    remoteCommandOverlayTimer = null
-  }
-}
-
-function formatRemoteKey(command) {
-  const parts = []
-  if (command?.ctrlKey) parts.push('Ctrl')
-  if (command?.shiftKey) parts.push('Shift')
-  if (command?.altKey) parts.push('Alt')
-  if (command?.metaKey) parts.push('Meta')
-  if (command?.key) parts.push(command.key === ' ' ? 'Space' : command.key)
-  return parts.join('+')
-}
-
-function showRemoteCommandOverlay(command, senderName = '') {
-  const actorName = senderName || '远控成员'
-  let label = `${actorName} 正在操作`
-
-  if (command?.type === 'click') {
-    label = `${actorName} 点击了屏幕`
-  } else if (command?.type === 'double-click') {
-    label = `${actorName} 双击了屏幕`
-  } else if (command?.type === 'contextmenu') {
-    label = `${actorName} 触发了右键`
-  } else if (command?.type === 'wheel') {
-    label = `${actorName} 正在滚动屏幕`
-  } else if (command?.type === 'keydown' && command?.key) {
-    label = `${actorName} 按下 ${formatRemoteKey(command)}`
-  }
-
-  remoteCommandOverlay.visible = true
-  remoteCommandOverlay.label = label
-  remoteCommandOverlay.x = Math.min(Math.max(command?.x ?? activeShare.value?.pointer?.x ?? 0.5, 0), 1)
-  remoteCommandOverlay.y = Math.min(Math.max(command?.y ?? activeShare.value?.pointer?.y ?? 0.5, 0), 1)
-
-  if (remoteCommandOverlayTimer) {
-    clearTimeout(remoteCommandOverlayTimer)
-  }
-
-  remoteCommandOverlayTimer = window.setTimeout(() => {
-    remoteCommandOverlay.visible = false
-  }, 1600)
-}
-
-function setRemoteControlState(controllerId = '', targetId = '') {
-  remoteControlTargetId.value = targetId || ''
-
-  if (!controllerId) {
-    clearRemoteCommandOverlay()
-  }
-}
-
 function formatNameList(names = []) {
   return names.filter(Boolean).join('、')
 }
@@ -3025,36 +2847,6 @@ function canPlaceGomokuStone(row, col) {
   )
 }
 
-async function checkRemoteControlAgent(options = {}) {
-  const { quiet = false } = options
-
-  try {
-    const response = await fetch(`${REMOTE_CONTROL_AGENT_URL}/health`)
-    if (!response.ok) {
-      throw new Error(`health-${response.status}`)
-    }
-
-    const payload = await response.json()
-    remoteControlAgentStatus.value = payload.dependencyReady ? 'ready' : 'dependency-missing'
-
-    if (!quiet && remoteControlAgentStatus.value !== 'ready' && !hasShownRemoteAgentHint) {
-      hasShownRemoteAgentHint = true
-      pushSystemMessage('共享方本机未准备好远控执行端，请先执行 `npm run remote-agent` 并安装 agent 依赖。')
-    }
-
-    return remoteControlAgentStatus.value === 'ready'
-  } catch (error) {
-    remoteControlAgentStatus.value = 'offline'
-
-    if (!quiet && !hasShownRemoteAgentHint) {
-      hasShownRemoteAgentHint = true
-      pushSystemMessage('共享方本机未启动远控执行端，真实远控暂不可用。请在共享方机器执行 `npm run remote-agent`。')
-    }
-
-    return false
-  }
-}
-
 function getSharedScreenCaptureMeta() {
   const videoTrack = sharedOutgoingStream.value?.getVideoTracks?.()[0]
   const settings = videoTrack?.getSettings?.() || {}
@@ -3139,51 +2931,6 @@ function refreshOutgoingMediaQuality() {
   applySharedStreamQualityProfile()
 }
 
-async function forwardRemoteControlCommandToAgent(command, senderName = '') {
-  const capture = getSharedScreenCaptureMeta()
-
-  if (capture.displaySurface && capture.displaySurface !== 'monitor') {
-    if (!hasShownRemoteAgentHint) {
-      hasShownRemoteAgentHint = true
-      pushSystemMessage('当前只支持“共享整个屏幕”时的真实远控。请重新选择整屏共享。')
-    }
-    return
-  }
-
-  const ready = await checkRemoteControlAgent({ quiet: true })
-  if (!ready) {
-    if (!hasShownRemoteAgentHint) {
-      hasShownRemoteAgentHint = true
-      pushSystemMessage('已收到远控指令，但共享方本机未启动远控执行端。请执行 `npm run remote-agent`。')
-    }
-    return
-  }
-
-  try {
-    const response = await fetch(`${REMOTE_CONTROL_AGENT_URL}/execute`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        senderName,
-        command,
-        capture
-      })
-    })
-
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok || payload.ok === false) {
-      throw new Error(payload.message || `execute-${response.status}`)
-    }
-  } catch (error) {
-    console.error('转发远控命令到本地执行端失败:', error)
-    if (!hasShownRemoteAgentHint) {
-      hasShownRemoteAgentHint = true
-      pushSystemMessage('远控执行端调用失败，请检查本地 agent 是否启动，以及系统是否已授予辅助功能权限。')
-    }
-  }
-}
 
 function revokeObjectUrl(url) {
   if (typeof url === 'string' && url.startsWith('blob:')) {
@@ -3300,6 +3047,19 @@ function resetSharedVideoTransport() {
   livekitPublisherSession.disconnect().catch(() => {})
   livekitSubscriberSession.disconnect().catch(() => {})
 
+  // 从所有 peer connections 中移除共享轨道
+  Object.keys(peerConnections).forEach((peerId) => {
+    const pc = peerConnections[peerId]
+    if (!pc) return
+
+    // 获取所有发送者并移除共享轨道
+    pc.getSenders().forEach((sender) => {
+      if (sender.track && sharedOutgoingStream.value?.getTracks().includes(sender.track)) {
+        sender.replaceTrack(null).catch(() => {})
+      }
+    })
+  })
+
   Object.keys(sharedTrackSenders).forEach((peerId) => {
     const senders = Object.values(sharedTrackSenders[peerId] || {})
     senders.forEach((sender) => {
@@ -3361,8 +3121,6 @@ function updateParticipants(nextParticipants = []) {
   participants.value = [...nextParticipants].sort((left, right) => {
     if (left.isAdmin && !right.isAdmin) return -1
     if (!left.isAdmin && right.isAdmin) return 1
-    if (left.isController && !right.isController) return -1
-    if (!left.isController && right.isController) return 1
     return left.name.localeCompare(right.name, 'zh-Hans-CN')
   })
 }
@@ -3383,7 +3141,6 @@ function clearActiveShare() {
   cancelSharedVideoPlayRequest()
   hasShownSharedVideoAutoplayHint = false
   resetSharedVideoTransport()
-  clearRemoteCommandOverlay()
 
   if (activeShare.value?.kind === 'audio') {
     if (sharedAudioRef.value) {
@@ -3697,8 +3454,6 @@ function hasPeerVideo(peerId) {
 function hasMemberActions(peer) {
   if (canInvitePeerFromList(peer)) return true
   if (canGrantAdmin && !peer.isSuperAdmin && peer.id !== selfId.value) return true
-  if (canManagePeerRemoteControl(peer)) return true
-  if (canRequestPeerRemoteControl(peer)) return true
   return false
 }
 
@@ -4288,9 +4043,6 @@ async function startScreenShare(sourceType = 'screen') {
         }
       }
     }
-
-    hasShownRemoteAgentHint = false
-    remoteControlAgentStatus.value = 'unknown'
 
     let deliveryMode = 'stream'
     let livekitRoomName = ''
@@ -5052,8 +4804,7 @@ function upsertParticipant(peer) {
     ...existing,
     ...peer,
     isAdmin: Boolean(existing?.isAdmin || peer.isAdmin),
-    isSuperAdmin: Boolean(existing?.isSuperAdmin || peer.isSuperAdmin),
-    isController: Boolean(existing?.isController || peer.isController)
+    isSuperAdmin: Boolean(existing?.isSuperAdmin || peer.isSuperAdmin)
   })
   updateParticipants(next)
 }
@@ -5120,7 +4871,6 @@ function cleanupSession() {
   clearActiveShare()
   stopLocalStream()
   isSpeakerOn.value = false
-  setRemoteControlState('', '')
   setGameInvite(null)
   setGameState(null)
   showGameMenu.value = false
@@ -5156,7 +4906,6 @@ function connectSocket() {
 
   socket.value.on('disconnect', () => {
     isConnected.value = false
-    setRemoteControlState('', '')
     if (!hasRequestedLeave.value) {
       pushSystemMessage('连接已断开，正在尝试重连...')
     }
@@ -5167,13 +4916,10 @@ function connectSocket() {
     participants: nextParticipants,
     sharedMedia,
     gameInvite: incomingGameInvite,
-    gameState: incomingGameState,
-    controllerSocketId,
-    controllerTargetSocketId
+    gameState: incomingGameState
   }) => {
     selfId.value = incomingId
     updateParticipants(nextParticipants || [])
-    setRemoteControlState(controllerSocketId, controllerTargetSocketId)
     setGameInvite(incomingGameInvite)
     setGameState(incomingGameState)
 
@@ -5236,46 +4982,6 @@ function connectSocket() {
     }
   })
 
-  socket.value.on('remote-control-requested', ({ requesterId, requesterName, targetId, targetName }) => {
-    if (targetId !== selfId.value || requesterId === selfId.value) {
-      return
-    }
-
-    const accepted = window.confirm(`${requesterName || '房间成员'} 想控制你的屏幕“${targetName || '当前共享'}”，是否授权？`)
-    if (!accepted) {
-      return
-    }
-
-    socket.value?.emit('remote-control-set', {
-      roomId: roomId.value,
-      targetId: selfId.value,
-      controllerId: requesterId
-    })
-  })
-
-  socket.value.on('remote-control-changed', ({ controllerId, controllerName, targetId, targetName }) => {
-    setRemoteControlState(controllerId, targetId)
-    setActiveSharePointer(null)
-
-    if (controllerId === selfId.value) {
-      pushSystemMessage(targetName ? `你已获得 ${targetName} 的远控权限` : '你已获得远控权限')
-      return
-    }
-
-    if (targetId === selfId.value && controllerName) {
-      pushSystemMessage(`${controllerName} 已接入你的屏幕远控`)
-      return
-    }
-
-    if (!controllerId) {
-      pushSystemMessage('远控权限已释放')
-      return
-    }
-
-    if (controllerName) {
-      pushSystemMessage(targetName ? `${controllerName} 正在远控 ${targetName}` : `${controllerName} 已获得远控权限`)
-    }
-  })
 
   socket.value.on('peer-left', ({ peerId, peerName }) => {
     removeParticipant(peerId)
@@ -5419,20 +5125,6 @@ function connectSocket() {
     })
   })
 
-  socket.value.on('remote-control-command', ({ mediaId, command, senderName }) => {
-    if (
-      !activeShare.value
-      || activeShare.value.id !== mediaId
-      || activeShare.value.kind !== 'screen'
-      || activeShare.value.ownerId !== selfId.value
-    ) {
-      return
-    }
-
-    showRemoteCommandOverlay(command, senderName)
-    forwardRemoteControlCommandToAgent(command, senderName)
-  })
-
   socket.value.on('share-closed', ({ mediaId, senderName, reason }) => {
     if (mediaId && activeShare.value?.id !== mediaId) {
       return
@@ -5440,7 +5132,6 @@ function connectSocket() {
 
     const suffix = reason === 'owner-left' ? '（共享者已离开）' : ''
     clearActiveShare()
-    setRemoteControlState('', '')
     pushSystemMessage(`${senderName || '房间成员'} 关闭了共享${suffix}`)
   })
 
@@ -6010,6 +5701,7 @@ function retryLivestream() {
 }
 
 function chooseMedia() {
+  console.log('[chooseMedia] called, canShare:', canShare.value, 'fileInputRef:', fileInputRef.value)
   if (!isConnected.value) {
     alert('连接尚未建立，请稍后再试')
     return
@@ -6018,7 +5710,14 @@ function chooseMedia() {
     alert('仅房主可以共享文件')
     return
   }
-  fileInputRef.value?.click()
+  const input = fileInputRef.value
+  console.log('[chooseMedia] input element:', input)
+  if (input) {
+    input.click()
+    console.log('[chooseMedia] click() called')
+  } else {
+    alert('文件输入控件未找到')
+  }
 }
 
 function handleFileChange(event) {
@@ -6237,58 +5936,6 @@ function closeGameStage() {
   })
 }
 
-function canManagePeerRemoteControl(peer) {
-  return Boolean(
-    peer?.id
-    && isSharingScreen.value
-    && isShareOwner.value
-    && peer.id !== selfId.value
-  )
-}
-
-function canRequestPeerRemoteControl(peer) {
-  return Boolean(
-    peer?.id
-    && canRequestRemoteControl.value
-    && activeShare.value?.ownerId === peer.id
-  )
-}
-
-function requestRemoteControl(targetId = activeShare.value?.ownerId) {
-  if (!socket.value?.connected || !targetId || targetId === selfId.value || !isSharingScreen.value) {
-    return
-  }
-
-  socket.value.emit('remote-control-request', {
-    roomId: roomId.value,
-    targetId
-  })
-  const targetName = participants.value.find((peer) => peer.id === targetId)?.name || activeShare.value?.ownerName || '对方'
-  pushSystemMessage(`已向 ${targetName} 发送远控申请`)
-}
-
-function releaseRemoteControl() {
-  if (!socket.value?.connected || (!isRemoteController.value && !isRemoteControlTarget.value && !isShareOwner.value)) {
-    return
-  }
-
-  socket.value.emit('remote-control-release', {
-    roomId: roomId.value
-  })
-}
-
-function togglePeerRemoteControl(peer) {
-  if (!socket.value?.connected || !peer?.id || !isSharingScreen.value || activeShare.value?.ownerId !== selfId.value) {
-    return
-  }
-
-  socket.value.emit('remote-control-set', {
-    roomId: roomId.value,
-    targetId: selfId.value,
-    controllerId: peer.isController ? null : peer.id
-  })
-}
-
 function sendMessage() {
   const content = inputMessage.value.trim()
   if (!content || !socket.value?.connected) {
@@ -6379,136 +6026,7 @@ function handleSharedStagePointerLeave() {
   })
 }
 
-function handleSharedStageMouseDown() {
-  if (showGameStage.value || !canSendRemoteControlCommands.value) {
-    return
-  }
-
-  sharedStageRef.value?.focus?.()
-}
-
-function getSharedStagePoint(event) {
-  if (!sharedStageRef.value) {
-    return null
-  }
-
-  const bounds = sharedStageRef.value.getBoundingClientRect()
-  if (!bounds.width || !bounds.height) {
-    return null
-  }
-
-  return {
-    x: Math.min(Math.max((event.clientX - bounds.left) / bounds.width, 0), 1),
-    y: Math.min(Math.max((event.clientY - bounds.top) / bounds.height, 0), 1)
-  }
-}
-
-function emitRemoteControlCommand(command) {
-  if (
-    showGameStage.value
-    || !socket.value?.connected
-    || !activeShare.value
-    || !canSendRemoteControlCommands.value
-  ) {
-    return
-  }
-
-  socket.value.emit('remote-control-command', {
-    roomId: roomId.value,
-    mediaId: activeShare.value.id,
-    targetId: remoteControlTargetId.value || activeShare.value.ownerId,
-    command
-  })
-}
-
-function handleSharedStageClick(event) {
-  if (showGameStage.value || !canSendRemoteControlCommands.value) {
-    return
-  }
-
-  const point = getSharedStagePoint(event)
-  if (!point) {
-    return
-  }
-
-  event.preventDefault()
-  emitRemoteControlCommand({
-    type: 'click',
-    ...point
-  })
-}
-
-function handleSharedStageDoubleClick(event) {
-  if (showGameStage.value || !canSendRemoteControlCommands.value) {
-    return
-  }
-
-  const point = getSharedStagePoint(event)
-  if (!point) {
-    return
-  }
-
-  event.preventDefault()
-  emitRemoteControlCommand({
-    type: 'double-click',
-    ...point
-  })
-}
-
-function handleSharedStageContextMenu(event) {
-  if (showGameStage.value || !canSendRemoteControlCommands.value) {
-    return
-  }
-
-  const point = getSharedStagePoint(event)
-  if (!point) {
-    return
-  }
-
-  event.preventDefault()
-  emitRemoteControlCommand({
-    type: 'contextmenu',
-    ...point
-  })
-}
-
-function handleSharedStageWheel(event) {
-  if (showGameStage.value || !canSendRemoteControlCommands.value) {
-    return
-  }
-
-  const point = getSharedStagePoint(event)
-  if (!point) {
-    return
-  }
-
-  event.preventDefault()
-  emitRemoteControlCommand({
-    type: 'wheel',
-    ...point,
-    deltaX: event.deltaX,
-    deltaY: event.deltaY
-  })
-}
-
-function handleSharedStageKeydown(event) {
-  if (showGameStage.value || !canSendRemoteControlCommands.value || event.isComposing) {
-    return
-  }
-
-  event.preventDefault()
-  emitRemoteControlCommand({
-    type: 'keydown',
-    key: event.key,
-    code: event.code,
-    ctrlKey: event.ctrlKey,
-    shiftKey: event.shiftKey,
-    altKey: event.altKey,
-    metaKey: event.metaKey,
-    x: activeShare.value?.pointer?.x ?? 0.5,
-    y: activeShare.value?.pointer?.y ?? 0.5
-  })
-}
+function handleSharedStageMouseDown() {}
 
 function emitShareControl(action, extra = {}) {
   if (!socket.value?.connected || !activeShare.value || !canManageSharedMedia.value) {
@@ -7453,7 +6971,6 @@ function closeSharedMedia(fromTrackEnded = false) {
   }
 
   clearActiveShare()
-  setRemoteControlState('', '')
   pushSystemMessage(fromTrackEnded ? '屏幕共享已结束' : '你关闭了当前共享')
 }
 
@@ -8330,11 +7847,6 @@ onUnmounted(() => {
     linear-gradient(160deg, rgba(6, 11, 20, 0.94), rgba(15, 23, 42, 0.92));
 }
 
-.shared-stage.controllable {
-  cursor: crosshair;
-  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.28), 0 0 0 1px rgba(96, 165, 250, 0.08);
-}
-
 .shared-stage.game-mode {
   height: clamp(360px, 60vh, 560px);
   align-items: stretch;
@@ -8386,13 +7898,6 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: nowrap;
   gap: 4px;
-}
-
-.share-toolbar-hint {
-  color: var(--text-muted);
-  font-size: 11px;
-  margin-left: auto;
-  white-space: nowrap;
 }
 
 .toolbar-btn {
@@ -8689,35 +8194,6 @@ onUnmounted(() => {
   background: rgba(15, 23, 42, 0.88);
   color: #e0f2fe;
   padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.remote-command-overlay {
-  position: absolute;
-  z-index: 5;
-  transform: translate(-50%, -50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  pointer-events: none;
-}
-
-.remote-command-pulse {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: rgba(248, 113, 113, 0.92);
-  border: 2px solid rgba(255, 255, 255, 0.96);
-  box-shadow: 0 0 0 10px rgba(248, 113, 113, 0.18);
-  animation: remote-pulse 0.9s ease-out infinite;
-}
-
-.remote-command-label {
-  background: rgba(15, 23, 42, 0.92);
-  color: #fee2e2;
-  padding: 7px 12px;
   border-radius: 999px;
   font-size: 12px;
   white-space: nowrap;
@@ -11306,18 +10782,6 @@ onUnmounted(() => {
 @keyframes spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes remote-pulse {
-  0% {
-    transform: scale(0.92);
-    opacity: 0.9;
-  }
-
-  100% {
-    transform: scale(1.08);
-    opacity: 0.25;
   }
 }
 

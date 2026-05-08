@@ -13,7 +13,6 @@
 - Screen / tab / webpage real-time sharing
 - Image, video & audio online preview with streaming playback
 - WebRTC P2P voice & video calls
-- Remote control (with authorization)
 - Gomoku & Landlord online multiplayer games
 - Room chat & member management
 
@@ -72,8 +71,7 @@ The script will guide you through:
 1. Click **Create Room** on the home page and share the room code
 2. Choose **Screen Share** / **File Share** / **Webpage Share** from the toolbar
 3. Click **Interactive Game** to start Gomoku or Landlord
-4. Request **Remote Control** after screen sharing
-5. Toggle **Microphone** / **Camera** on the toolbar for voice & video
+4. Toggle **Microphone** / **Camera** on the toolbar for voice & video
 
 ## Project Structure
 
@@ -82,7 +80,6 @@ The script will guide you through:
 ├── components/      # Components
 ├── utils/           # Utility modules
 ├── server/          # Signaling server + API
-├── agent/           # Remote control agent
 ├── style.css        # Global styles
 └── vite.config.js   # Build config
 ```
