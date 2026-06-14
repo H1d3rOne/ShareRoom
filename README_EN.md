@@ -18,6 +18,7 @@
 ## Table of Contents
 
 - [Features](#features)
+- [Feature Overview](#feature-overview)
 - [Tech Stack](#tech-stack)
 - [Quick Start](#quick-start)
 - [Start & Stop Scripts](#start--stop-scripts)
@@ -38,6 +39,34 @@
 | Games | Gomoku and Landlord multiplayer games; the game menu can be opened/closed with **Game Share** |
 | Collaboration | Room chat, member list, admin permissions, and synchronized shared controls |
 | Operations | Built-in install, start, stop, and uninstall scripts with optional Nginx + HTTPS setup |
+
+## Feature Overview
+
+ShareRoom is centered around a shared stage. Once an admin starts sharing, room members see the same content, playback state, and interaction results, making it suitable for remote collaboration, group watching, and lightweight online meetings.
+
+### File Sharing
+
+Upload local files and share them in the room. Common images, videos, and audio files can be previewed or played directly, while other file types are displayed as file cards for quick identification, opening, or download.
+
+### Screen Sharing
+
+Share an entire screen, an application window, or a browser tab. It is useful for demos, remote assistance, walkthroughs, synchronized page viewing, and content explanation. Browser screen sharing depends on browser support and is recommended over HTTPS or a local secure context.
+
+### Webpage Sharing
+
+Admins can enter a webpage URL and show it on the shared stage. Recent webpage history is kept for quick reuse, making it convenient to open documents, references, previews, or online content together.
+
+### Live Stream Sharing
+
+Paste Douyin, Bilibili, or Migu Video live URLs and let the backend resolve them into playable video streams. Direct HLS `.m3u8` and FLV `.flv` stream URLs are also supported. Live streams are proxied through the backend to handle CORS, temporary auth, Range requests, and HTTPS mixed-content playback issues.
+
+### Game Sharing
+
+Built-in Gomoku and Landlord games are available. Admins can click **Game Share** to open the game menu and start a match. If there is no active invite or match, clicking **Game Share** again closes the game menu.
+
+### Voice, Video, and Chat
+
+Room members can enable microphone and camera for real-time communication, or use text chat to discuss shared content.
 
 ## Tech Stack
 
@@ -195,7 +224,7 @@ Example:
 MIGU_USER_ID=your-user-id \
 MIGU_TOKEN=your-token \
 MIGU_RATE_TYPE=3 \
-npm run start
+./start.sh
 ```
 
 ## Screenshots
