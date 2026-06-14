@@ -207,17 +207,17 @@ MIGU_RATE_TYPE=3 \
 
 ## Screenshots
 
-| Room | File Sharing |
+| Music Sharing | Live Stream Sharing |
 | --- | --- |
-| ![Room](screenshots/截屏2026-05-08%2001.54.33.png) | ![File Sharing](screenshots/截屏2026-05-08%2001.57.16.png) |
+| ![Music Sharing](screenshots/截屏2026-05-08%2001.54.33.png) | ![Live Stream Sharing](screenshots/截屏2026-05-08%2001.57.16.png) |
 
-| Music Player | Landlord Game |
+| Video Sharing | Webpage Sharing |
 | --- | --- |
-| ![Music Player](screenshots/截屏2026-05-08%2001.58.06.png) | ![Landlord Game](screenshots/截屏2026-05-08%2002.00.44.png) |
+| ![Video Sharing](screenshots/截屏2026-05-08%2001.58.06.png) | ![Webpage Sharing](screenshots/截屏2026-05-08%2002.00.44.png) |
 
-| Gomoku Game | Webpage Sharing |
+| Game Sharing | Screen Sharing |
 | --- | --- |
-| ![Gomoku Game](screenshots/截屏2026-05-08%2002.03.32.png) | ![Webpage Sharing](screenshots/截屏2026-05-08%2002.12.24.png) |
+| ![Game Sharing](screenshots/截屏2026-05-08%2002.03.32.png) | ![Screen Sharing](screenshots/截屏2026-05-08%2002.12.24.png) |
 
 ## Project Structure
 
