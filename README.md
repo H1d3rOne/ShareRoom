@@ -262,4 +262,5 @@ npm run test
 
 本项目基于 [GNU Affero General Public License v3.0](LICENSE) 发布，SPDX 标识为 `AGPL-3.0-only`。
 
-如果你修改本项目并通过网络提供服务，请按照 AGPL-3.0 要求向用户提供相应源码。
+如果你修改本项目并通过网络提供服务，请按照 AGPL-3.0 要求向用户提供相应源码。  
+欢迎来[linux.do](https://linux.do/)社区交流、分享和反馈。
