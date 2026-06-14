@@ -22,7 +22,6 @@
 - [Tech Stack](#tech-stack)
 - [Quick Start](#quick-start)
 - [Start & Stop Scripts](#start--stop-scripts)
-- [Live Stream Sharing](#live-stream-sharing)
 - [Environment Variables](#environment-variables)
 - [Screenshots](#screenshots)
 - [Project Structure](#project-structure)
@@ -184,27 +183,6 @@ Remove runtime configuration written by ShareRoom:
 ```
 
 > `uninstall.sh` does not remove source code, `node_modules`, `dist`, or system Node/npm. It only stops ShareRoom, removes ShareRoom Nginx site files, and cleans `.run/`.
-
-## Live Stream Sharing
-
-Click **Live Share** in the room toolbar and choose one of the following:
-
-- **Auto Detect:** paste a Douyin, Bilibili, or Migu Video live URL
-- **Douyin / Bilibili / Migu Video:** explicitly select a platform resolver
-- **HLS / FLV:** enter a `.m3u8` or `.flv` stream URL directly
-
-Migu Video supports:
-
-- `https://www.miguvideo.com/...` live URLs
-- Migu links embedded in share text
-- Plain numeric program IDs, e.g. `608807420`
-- Match links with `mgdbId`, e.g. `https://www.miguvideo.com/p/live/120000578412`
-
-Resolving and playback notes:
-
-- Platform room URLs are resolved by the backend `/api/resolve-livestream` endpoint.
-- HLS playlists and FLV streams are proxied through the backend by default to avoid CORS, temporary auth, Range request, and HTTPS mixed-content issues.
-- Migu Video defaults to `MIGU_RATE_TYPE=3`; when unauthenticated or without entitlement, the upstream service may automatically downgrade the returned quality.
 
 ## Environment Variables
 
