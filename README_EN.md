@@ -65,8 +65,8 @@ cd ShareRoom
 npm install
 cd server && npm install && cd ..
 
-# Recommended: start backend and frontend together
-npm run start-dev
+# Start backend and frontend together
+./start_dev.sh
 ```
 
 Default URLs:
@@ -74,53 +74,51 @@ Default URLs:
 - Frontend dev server: `http://127.0.0.1:3001`
 - Backend signaling/API: `http://127.0.0.1:3002`
 
-You can also start them separately:
+To start them manually in separate terminals:
 
 ```bash
-npm run server   # backend :3002
-npm run dev      # frontend :3001
+node server/server.js   # backend :3002
+npx vite                # frontend :3001
 ```
 
 ### Production
 
 ```bash
-npm run build
-npm run start
+./start.sh
+```
+
+Stop the production service:
+
+```bash
+./stop.sh
 ```
 
 The production service listens on `http://127.0.0.1:3002` by default.
 
 ## Start & Stop Scripts
 
-### npm Scripts
+### Script Commands
 
 | Command | Description |
 | --- | --- |
-| `npm run start-dev` | Start backend `:3002` and frontend `:3001` for development |
-| `npm run dev` | Start only the Vite frontend dev server |
-| `npm run server` | Start only the Node/Socket.IO backend |
-| `npm run build` | Build production frontend assets into `dist/` |
-| `npm run start` | Start the production backend and serve `dist/` |
-| `npm run serve` | Build and then start production service |
-| `npm run preview` | Start Vite preview service |
-| `npm run test` | Run `tests/**/*.test.mjs` |
-| `npm run install-all` | Interactive deployment setup with optional Nginx / HTTPS / Let's Encrypt |
-| `npm run start-all` | Build and start the production service in the background |
-| `npm run stop-all` | Stop the background production service and clean residual processes |
-| `npm run uninstall-all` | Stop service, remove ShareRoom Nginx config, and clean `.run/` |
+| `./start_dev.sh` | Start backend `:3002` and frontend `:3001` for development |
+| `./start.sh` | Install dependencies, build frontend assets, and start production service in the background |
+| `./stop.sh` | Stop the background production service and clean residual processes |
+| `./install.sh` | Interactive deployment setup with optional Nginx / HTTPS / Let's Encrypt |
+| `./uninstall.sh` | Stop service, remove ShareRoom Nginx config, and clean `.run/` |
 
 ### Background Service Scripts
 
 ```bash
-npm run start-all
-npm run stop-all
+./start.sh
+./stop.sh
 ```
 
-`start-all` does the following:
+`start.sh` does the following:
 
 1. Stops any existing ShareRoom process
-2. Runs `npm install`
-3. Runs `npm run build`
+2. Installs project dependencies
+3. Builds frontend assets
 4. Starts `node server/server.js` in the background
 5. Writes runtime files:
    - PID: `.run/shareroom.pid`
@@ -137,12 +135,12 @@ tail -f .run/shareroom.log
 For Linux servers based on apt distros:
 
 ```bash
-npm run install-all
-npm run start-all
-npm run stop-all
+./install.sh
+./start.sh
+./stop.sh
 ```
 
-`install-all` guides you through:
+`install.sh` guides you through:
 
 1. Installing frontend and backend dependencies
 2. Asking whether to configure a domain
@@ -153,10 +151,10 @@ npm run stop-all
 Remove runtime configuration written by ShareRoom:
 
 ```bash
-npm run uninstall-all
+./uninstall.sh
 ```
 
-> `uninstall-all` does not remove source code, `node_modules`, `dist`, or system Node/npm. It only stops ShareRoom, removes ShareRoom Nginx site files, and cleans `.run/`.
+> `uninstall.sh` does not remove source code, `node_modules`, `dist`, or system Node/npm. It only stops ShareRoom, removes ShareRoom Nginx site files, and cleans `.run/`.
 
 ## Live Stream Sharing
 

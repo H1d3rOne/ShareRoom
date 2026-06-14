@@ -65,8 +65,8 @@ cd ShareRoom
 npm install
 cd server && npm install && cd ..
 
-# 推荐：同时启动后端与前端开发服务
-npm run start-dev
+# 同时启动后端与前端开发服务
+./start_dev.sh
 ```
 
 默认访问地址：
@@ -74,53 +74,51 @@ npm run start-dev
 - 前端开发服务：`http://127.0.0.1:3001`
 - 后端信令/API：`http://127.0.0.1:3002`
 
-也可以分开启动：
+如需手动分开启动：
 
 ```bash
-npm run server   # 后端 :3002
-npm run dev      # 前端 :3001
+node server/server.js   # 后端 :3002
+npx vite                # 前端 :3001
 ```
 
 ### 生产运行
 
 ```bash
-npm run build
-npm run start
+./start.sh
+```
+
+停止生产服务：
+
+```bash
+./stop.sh
 ```
 
 生产服务默认监听：`http://127.0.0.1:3002`
 
 ## 启动与停止脚本
 
-### npm Scripts
+### 脚本命令
 
 | 命令 | 说明 |
 | --- | --- |
-| `npm run start-dev` | 开发模式一键启动：后端 `:3002` + 前端 `:3001` |
-| `npm run dev` | 仅启动 Vite 前端开发服务 |
-| `npm run server` | 仅启动 Node/Socket.IO 后端服务 |
-| `npm run build` | 构建生产前端资源到 `dist/` |
-| `npm run start` | 以生产模式启动后端服务，自动托管 `dist/` |
-| `npm run serve` | 先构建再启动生产服务 |
-| `npm run preview` | 启动 Vite 预览服务 |
-| `npm run test` | 运行 `tests/**/*.test.mjs` |
-| `npm run install-all` | 交互式安装部署，支持 Nginx / HTTPS / Let's Encrypt |
-| `npm run start-all` | 构建并后台启动生产服务，写入 PID 与日志 |
-| `npm run stop-all` | 停止后台生产服务并清理残留进程 |
-| `npm run uninstall-all` | 停止服务、移除 ShareRoom 写入的 Nginx 配置、清理 `.run/` |
+| `./start_dev.sh` | 开发模式一键启动：后端 `:3002` + 前端 `:3001` |
+| `./start.sh` | 安装依赖、构建前端并后台启动生产服务 |
+| `./stop.sh` | 停止后台生产服务并清理残留进程 |
+| `./install.sh` | 交互式安装部署，支持 Nginx / HTTPS / Let's Encrypt |
+| `./uninstall.sh` | 停止服务、移除 ShareRoom 写入的 Nginx 配置、清理 `.run/` |
 
 ### 后台服务脚本
 
 ```bash
-npm run start-all
-npm run stop-all
+./start.sh
+./stop.sh
 ```
 
-`start-all` 会执行以下流程：
+`start.sh` 会执行以下流程：
 
 1. 停止旧的 ShareRoom 进程
-2. 执行 `npm install`
-3. 执行 `npm run build`
+2. 安装项目依赖
+3. 构建前端资源
 4. 后台启动 `node server/server.js`
 5. 写入运行文件：
    - PID：`.run/shareroom.pid`
@@ -137,12 +135,12 @@ tail -f .run/shareroom.log
 适用于 Linux（apt 系发行版）服务器：
 
 ```bash
-npm run install-all
-npm run start-all
-npm run stop-all
+./install.sh
+./start.sh
+./stop.sh
 ```
 
-`install-all` 会交互式引导：
+`install.sh` 会交互式引导：
 
 1. 安装前端与后端依赖
 2. 询问是否配置域名
@@ -153,10 +151,10 @@ npm run stop-all
 卸载 ShareRoom 写入的运行配置：
 
 ```bash
-npm run uninstall-all
+./uninstall.sh
 ```
 
-> `uninstall-all` 不会删除项目源码、`node_modules`、`dist` 或系统 Node/npm，只移除 ShareRoom 进程、Nginx 站点配置和 `.run/`。
+> `uninstall.sh` 不会删除项目源码、`node_modules`、`dist` 或系统 Node/npm，只移除 ShareRoom 进程、Nginx 站点配置和 `.run/`。
 
 ## 直播共享
 
