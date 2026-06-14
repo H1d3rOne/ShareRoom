@@ -1,93 +1,240 @@
 <p align="center">
   <h1 align="center">ShareRoom</h1>
-  <p align="center">Real-time screen, file & game sharing collaboration rooms</p>
+  <p align="center">A real-time collaboration room for screen, file, webpage, live stream, voice/video, and game sharing.</p>
   <p align="center">
-    <a href="README.md">简体中文</a> · <strong>English</strong>
+    <a href="README.md">简体中文</a> · <a href="README_EN.md"><strong>English</strong></a>
+  </p>
+  <p align="center">
+    <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg"></a>
+    <img alt="Vue" src="https://img.shields.io/badge/Vue-3-42b883.svg">
+    <img alt="Vite" src="https://img.shields.io/badge/Vite-4-646cff.svg">
+    <img alt="Node" src="https://img.shields.io/badge/Node.js-%3E%3D16-339933.svg">
+    <img alt="Socket.IO" src="https://img.shields.io/badge/Socket.IO-4-black.svg">
   </p>
 </p>
 
 ---
 
+## Table of Contents
+
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Quick Start](#quick-start)
+- [Start & Stop Scripts](#start--stop-scripts)
+- [Live Stream Sharing](#live-stream-sharing)
+- [Environment Variables](#environment-variables)
+- [Screenshots](#screenshots)
+- [Project Structure](#project-structure)
+- [Tests](#tests)
+- [License](#license)
+
 ## Features
 
-- Screen / tab / webpage real-time sharing
-- Image, video & audio online preview with streaming playback
-- Live stream sharing: Douyin, Bilibili, Migu Video room resolving, plus HLS / FLV direct URLs
-- WebRTC P2P voice & video calls
-- Gomoku & Landlord online multiplayer games
-- Room chat & member management
+| Area | Capabilities |
+| --- | --- |
+| Shared stage | Screen / tab / webpage sharing, image/video/audio preview, and streaming playback |
+| Live streams | Douyin, Bilibili, and Migu Video room resolving, plus direct HLS / FLV URLs |
+| Real-time media | WebRTC P2P voice/video calls with optional LiveKit support |
+| Games | Gomoku and Landlord multiplayer games; the game menu can be opened/closed with **Game Share** |
+| Collaboration | Room chat, member list, admin permissions, and synchronized shared controls |
+| Operations | Built-in install, start, stop, and uninstall scripts with optional Nginx + HTTPS setup |
 
 ## Tech Stack
 
-Vue 3 · Vite · Socket.IO · WebRTC · LiveKit (optional) · Express 5
+- **Frontend:** Vue 3, Vite, hls.js, flv.js, WebRTC
+- **Backend:** Node.js, Express 5, Socket.IO
+- **Optional realtime service:** LiveKit
+- **Tests:** `node:test`
+- **Deployment:** Bash scripts, Nginx, Let's Encrypt (optional)
 
 ## Quick Start
 
+### Requirements
+
+- Node.js >= 16
+- npm
+- A modern desktop browser (latest Chrome / Edge / Safari recommended)
+- HTTPS or a local secure context is recommended for screen sharing
+
+### Local Development
+
 ```bash
-# Clone the repository
 git clone https://github.com/H1d3rOne/ShareRoom.git
 cd ShareRoom
 
-# Install dependencies
 npm install
 cd server && npm install && cd ..
 
-# Development mode (frontend :3001, signaling :3002)
-npm run dev
-npm run server
+# Recommended: start backend and frontend together
+npm run start-dev
+```
 
-# Production build
+Default URLs:
+
+- Frontend dev server: `http://127.0.0.1:3001`
+- Backend signaling/API: `http://127.0.0.1:3002`
+
+You can also start them separately:
+
+```bash
+npm run server   # backend :3002
+npm run dev      # frontend :3001
+```
+
+### Production
+
+```bash
 npm run build
 npm run start
 ```
 
-### One-Click Deployment
+The production service listens on `http://127.0.0.1:3002` by default.
 
-**Requirements:** Linux (apt-based distro) · Node.js >= 16 · npm · Domain name (optional, for Nginx + HTTPS)
+## Start & Stop Scripts
+
+### npm Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run start-dev` | Start backend `:3002` and frontend `:3001` for development |
+| `npm run dev` | Start only the Vite frontend dev server |
+| `npm run server` | Start only the Node/Socket.IO backend |
+| `npm run build` | Build production frontend assets into `dist/` |
+| `npm run start` | Start the production backend and serve `dist/` |
+| `npm run serve` | Build and then start production service |
+| `npm run preview` | Start Vite preview service |
+| `npm run test` | Run `tests/**/*.test.mjs` |
+| `npm run install-all` | Interactive deployment setup with optional Nginx / HTTPS / Let's Encrypt |
+| `npm run start-all` | Build and start the production service in the background |
+| `npm run stop-all` | Stop the background production service and clean residual processes |
+| `npm run uninstall-all` | Stop service, remove ShareRoom Nginx config, and clean `.run/` |
+
+### Background Service Scripts
 
 ```bash
-npm run install-all   # Interactive setup (Nginx / HTTPS / Let's Encrypt)
-npm run start-all     # Start
-npm run stop-all      # Stop
+npm run start-all
+npm run stop-all
 ```
 
-The script will guide you through:
-1. Installing frontend & backend dependencies
-2. Asking whether to configure a domain (enter a domain already resolved to your server)
-3. Asking whether to enable HTTPS (auto-installs certbot for Let's Encrypt certificates)
-4. Configuring app port (default 3002), Nginx reverse proxy & SSL
-5. Falling back to port 8443 if port 443 is occupied
+`start-all` does the following:
 
-## Screenshots
+1. Stops any existing ShareRoom process
+2. Runs `npm install`
+3. Runs `npm run build`
+4. Starts `node server/server.js` in the background
+5. Writes runtime files:
+   - PID: `.run/shareroom.pid`
+   - Log: `.run/shareroom.log`
 
-![Room](screenshots/截屏2026-05-08%2001.54.33.png)
-![File Sharing](screenshots/截屏2026-05-08%2001.57.16.png)
-![Music Player](screenshots/截屏2026-05-08%2001.58.06.png)
-![Landlord Game](screenshots/截屏2026-05-08%2002.00.44.png)
-![Gomoku Game](screenshots/截屏2026-05-08%2002.03.32.png)
-![Webpage Sharing](screenshots/截屏2026-05-08%2002.12.24.png)
+View logs:
 
-## Usage
+```bash
+tail -f .run/shareroom.log
+```
 
-1. Click **Create Room** on the home page and share the room code
-2. Choose **Screen Share** / **File Share** / **Webpage Share** / **Live Share** from the toolbar
-3. For live sharing, keep **Auto Detect** selected and paste a Douyin, Bilibili, or Migu Video live URL, or enter an HLS / FLV stream URL directly
-4. Migu Video supports `miguvideo.com` links, links embedded in share text, and plain numeric program IDs
-5. Click **Game Share** to open the game menu and start Gomoku or Landlord; when no invite/match is active, click **Game Share** again to close the menu
-6. Toggle **Microphone** / **Camera** on the toolbar for voice & video
+### One-Click Deployment
 
-### Live Stream Resolving
+For Linux servers based on apt distros:
 
-- Douyin, Bilibili, and Migu Video room URLs are resolved by the backend `/api/resolve-livestream` endpoint.
-- HLS playlists and FLV streams are proxied through the backend by default to avoid CORS, temporary auth, and mixed-content playback issues.
-- Migu Video defaults to `MIGU_RATE_TYPE=3`; when unauthenticated or without entitlement, the upstream service may downgrade the quality automatically.
-- To use account entitlements, set these variables before starting the server:
+```bash
+npm run install-all
+npm run start-all
+npm run stop-all
+```
+
+`install-all` guides you through:
+
+1. Installing frontend and backend dependencies
+2. Asking whether to configure a domain
+3. Asking whether to enable HTTPS, and installing certbot for Let's Encrypt certificates
+4. Configuring the application port (`3002` by default), Nginx reverse proxy, and SSL
+5. Falling back to `8443` if port `443` is occupied
+
+Remove runtime configuration written by ShareRoom:
+
+```bash
+npm run uninstall-all
+```
+
+> `uninstall-all` does not remove source code, `node_modules`, `dist`, or system Node/npm. It only stops ShareRoom, removes ShareRoom Nginx site files, and cleans `.run/`.
+
+## Live Stream Sharing
+
+Click **Live Share** in the room toolbar and choose one of the following:
+
+- **Auto Detect:** paste a Douyin, Bilibili, or Migu Video live URL
+- **Douyin / Bilibili / Migu Video:** explicitly select a platform resolver
+- **HLS / FLV:** enter a `.m3u8` or `.flv` stream URL directly
+
+Migu Video supports:
+
+- `https://www.miguvideo.com/...` live URLs
+- Migu links embedded in share text
+- Plain numeric program IDs, e.g. `608807420`
+- Match links with `mgdbId`, e.g. `https://www.miguvideo.com/p/live/120000578412`
+
+Resolving and playback notes:
+
+- Platform room URLs are resolved by the backend `/api/resolve-livestream` endpoint.
+- HLS playlists and FLV streams are proxied through the backend by default to avoid CORS, temporary auth, Range request, and HTTPS mixed-content issues.
+- Migu Video defaults to `MIGU_RATE_TYPE=3`; when unauthenticated or without entitlement, the upstream service may automatically downgrade the returned quality.
+
+## Environment Variables
+
+| Variable | Required | Default | Description |
+| --- | --- | --- | --- |
+| `PORT` | No | `3002` | Backend listening port |
+| `LIVEKIT_URL` | No | empty | LiveKit server URL; normal WebRTC flow is used when unset |
+| `LIVEKIT_API_KEY` | No | empty | LiveKit API key |
+| `LIVEKIT_API_SECRET` | No | empty | LiveKit API secret |
+| `MIGU_USER_ID` | No | empty | Migu account user ID for entitlement-based resolving |
+| `MIGU_TOKEN` | No | empty | Migu account token for entitlement-based resolving |
+| `MIGU_RATE_TYPE` | No | `3` | Requested Migu quality; actual quality depends on upstream entitlement |
+
+Example:
 
 ```bash
 MIGU_USER_ID=your-user-id \
 MIGU_TOKEN=your-token \
 MIGU_RATE_TYPE=3 \
 npm run start
+```
+
+## Screenshots
+
+| Room | File Sharing |
+| --- | --- |
+| ![Room](screenshots/截屏2026-05-08%2001.54.33.png) | ![File Sharing](screenshots/截屏2026-05-08%2001.57.16.png) |
+
+| Music Player | Landlord Game |
+| --- | --- |
+| ![Music Player](screenshots/截屏2026-05-08%2001.58.06.png) | ![Landlord Game](screenshots/截屏2026-05-08%2002.00.44.png) |
+
+| Gomoku Game | Webpage Sharing |
+| --- | --- |
+| ![Gomoku Game](screenshots/截屏2026-05-08%2002.03.32.png) | ![Webpage Sharing](screenshots/截屏2026-05-08%2002.12.24.png) |
+
+## Project Structure
+
+```text
+├── App.vue                 # App entry component
+├── main.js                 # Vue bootstrap entry
+├── router.js               # Frontend routes
+├── pages/                  # Pages (home + room)
+├── components/             # Reusable components
+├── utils/                  # Frontend utilities
+├── server/                 # Express / Socket.IO backend
+│   ├── server.js           # Signaling, sharing, and live stream APIs
+│   ├── miguResolver.js     # Migu Video live stream resolver
+│   └── livekit/            # Optional LiveKit integration
+├── tests/                  # node:test tests
+├── screenshots/            # README screenshots
+├── start.sh                # Production background start script
+├── stop.sh                 # Production background stop script
+├── install.sh              # Interactive server deployment script
+├── uninstall.sh            # Runtime config uninstall script
+├── vite.config.js          # Vite config
+└── package.json            # npm scripts and dependencies
 ```
 
 ## Tests
@@ -98,18 +245,16 @@ node --test tests/server/livestream-migu.test.mjs
 npm run build
 ```
 
-## Project Structure
+Full test suite:
 
+```bash
+npm run test
 ```
-├── pages/           # Pages (home + room)
-├── components/      # Components
-├── utils/           # Utility modules
-├── server/          # Signaling server + API + live stream resolving/proxying
-├── tests/           # node:test static and API tests
-├── style.css        # Global styles
-└── vite.config.js   # Build config
-```
+
+> Some UI static assertions may still reflect older markup. If a failure appears, check whether the failing assertion is an outdated snapshot-style check.
 
 ## License
 
-[MIT](LICENSE)
+This project is licensed under the [GNU Affero General Public License v3.0](LICENSE), SPDX identifier `AGPL-3.0-only`.
+
+If you modify this project and provide it as a network service, AGPL-3.0 requires you to provide the corresponding source code to users.
