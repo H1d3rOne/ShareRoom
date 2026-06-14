@@ -12,6 +12,7 @@
 
 - Screen / tab / webpage real-time sharing
 - Image, video & audio online preview with streaming playback
+- Live stream sharing: Douyin, Bilibili, Migu Video room resolving, plus HLS / FLV direct URLs
 - WebRTC P2P voice & video calls
 - Gomoku & Landlord online multiplayer games
 - Room chat & member management
@@ -69,9 +70,33 @@ The script will guide you through:
 ## Usage
 
 1. Click **Create Room** on the home page and share the room code
-2. Choose **Screen Share** / **File Share** / **Webpage Share** from the toolbar
-3. Click **Interactive Game** to start Gomoku or Landlord
-4. Toggle **Microphone** / **Camera** on the toolbar for voice & video
+2. Choose **Screen Share** / **File Share** / **Webpage Share** / **Live Share** from the toolbar
+3. For live sharing, keep **Auto Detect** selected and paste a Douyin, Bilibili, or Migu Video live URL, or enter an HLS / FLV stream URL directly
+4. Migu Video supports `miguvideo.com` links, links embedded in share text, and plain numeric program IDs
+5. Click **Game Share** to open the game menu and start Gomoku or Landlord; when no invite/match is active, click **Game Share** again to close the menu
+6. Toggle **Microphone** / **Camera** on the toolbar for voice & video
+
+### Live Stream Resolving
+
+- Douyin, Bilibili, and Migu Video room URLs are resolved by the backend `/api/resolve-livestream` endpoint.
+- HLS playlists and FLV streams are proxied through the backend by default to avoid CORS, temporary auth, and mixed-content playback issues.
+- Migu Video defaults to `MIGU_RATE_TYPE=3`; when unauthenticated or without entitlement, the upstream service may downgrade the quality automatically.
+- To use account entitlements, set these variables before starting the server:
+
+```bash
+MIGU_USER_ID=your-user-id \
+MIGU_TOKEN=your-token \
+MIGU_RATE_TYPE=3 \
+npm run start
+```
+
+## Tests
+
+```bash
+node --check server/server.js
+node --test tests/server/livestream-migu.test.mjs
+npm run build
+```
 
 ## Project Structure
 
@@ -79,7 +104,8 @@ The script will guide you through:
 ├── pages/           # Pages (home + room)
 ├── components/      # Components
 ├── utils/           # Utility modules
-├── server/          # Signaling server + API
+├── server/          # Signaling server + API + live stream resolving/proxying
+├── tests/           # node:test static and API tests
 ├── style.css        # Global styles
 └── vite.config.js   # Build config
 ```
