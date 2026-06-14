@@ -941,7 +941,7 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 1l22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
               <span>直播共享</span>
             </button>
-            <button v-if="canOpenGameMenu" class="toolbar-btn game-menu-btn" :class="{ active: showGameMenu || activeGame || gameInvite }" @click="openGameMenu">
+            <button v-if="canOpenGameMenu" class="toolbar-btn game-menu-btn" :class="{ active: showGameMenu || activeGame || gameInvite }" @click="toggleGameMenu">
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="16" cy="12" r="1.5" fill="currentColor"/></svg>
               <span>游戏共享</span>
             </button>
@@ -1161,6 +1161,7 @@
             <option value="auto">自动识别</option>
             <option value="douyin">抖音</option>
             <option value="bilibili">哔哩哔哩</option>
+            <option value="migu">咪咕视频</option>
             <option value="hls">HLS 流</option>
             <option value="flv">FLV 流</option>
           </select>
@@ -1436,23 +1437,36 @@ const livestreamPlaceholder = computed(() => {
   switch (livestreamPlatform.value) {
     case 'douyin': return 'https://live.douyin.com/xxxxxxxx'
     case 'bilibili': return 'https://live.bilibili.com/xxxxxxxx'
+    case 'migu': return 'https://www.miguvideo.com/...?...cid=608807420'
     case 'hls': return 'https://example.com/live/stream.m3u8'
     case 'flv': return 'https://example.com/live/stream.flv'
-    default: return '输入抖音/B站直播间地址或HLS/FLV流地址'
+    default: return '输入抖音/B站/咪咕直播间地址或HLS/FLV流地址'
   }
 })
 const livestreamHint = computed(() => {
   switch (livestreamPlatform.value) {
     case 'douyin': return '输入抖音直播间地址，系统将自动解析直播流。'
     case 'bilibili': return '输入哔哩哔哩直播间地址，系统将自动解析直播流。'
+    case 'migu': return '输入咪咕视频直播间地址，系统将自动解析可播放直播流。'
     case 'hls': return '输入 HLS (.m3u8) 直播流地址，房间成员将同步观看。'
     case 'flv': return '输入 FLV 直播流地址，房间成员将同步观看。'
-    default: return '自动识别直播平台，支持抖音、哔哩哔哩直播间地址及 HLS/FLV 流地址。'
+    default: return '自动识别直播平台，支持抖音、哔哩哔哩、咪咕直播间地址及 HLS/FLV 流地址。'
   }
 })
+function normalizeLivestreamInput(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const urlMatch = raw.match(/https?:\/\/[^\s"'<>]+/i)
+  if (urlMatch) {
+    return urlMatch[0].replace(/[),，。！？!？、；;]+$/g, '')
+  }
+  const pidMatch = raw.match(/(?:^|\D)(\d{6,})(?:\D|$)/)
+  return pidMatch ? pidMatch[1] : raw
+}
 const isValidLivestreamUrl = computed(() => {
-  const url = livestreamUrlInput.value.trim()
+  const url = normalizeLivestreamInput(livestreamUrlInput.value)
   if (!url) return false
+  if ((livestreamPlatform.value === 'migu' || livestreamPlatform.value === 'auto') && /^\d{6,}$/.test(url)) return true
   try {
     new URL(url)
     if (!(url.startsWith('http://') || url.startsWith('https://'))) return false
@@ -1460,9 +1474,10 @@ const isValidLivestreamUrl = computed(() => {
     switch (livestreamPlatform.value) {
       case 'douyin': return lower.includes('douyin.com')
       case 'bilibili': return lower.includes('bilibili.com')
+      case 'migu': return lower.includes('miguvideo.com') || lower.includes('cmvideo.cn') || lower.includes('migu.cn')
       case 'hls': return lower.includes('.m3u8')
       case 'flv': return lower.includes('.flv')
-      default: return lower.includes('douyin.com') || lower.includes('bilibili.com') || lower.includes('.m3u8') || lower.includes('.flv')
+      default: return lower.includes('douyin.com') || lower.includes('bilibili.com') || lower.includes('miguvideo.com') || lower.includes('cmvideo.cn') || lower.includes('migu.cn') || lower.includes('.m3u8') || lower.includes('.flv')
     }
   } catch {
     return false
@@ -2671,6 +2686,23 @@ function openGameMenu() {
   if (!gameInvite.value && !activeGame.value) {
     selectedGameType.value = ''
   }
+}
+
+function resetGameMenuSelection() {
+  closeInvitePicker()
+  selectedGomokuInviteeId.value = ''
+  selectedLandlordInviteeIds.value = []
+  selectedGameType.value = ''
+}
+
+function toggleGameMenu() {
+  if (showGameMenu.value && !gameInvite.value && !activeGame.value) {
+    resetGameMenuSelection()
+    showGameMenu.value = false
+    return
+  }
+
+  openGameMenu()
 }
 
 function openGameHome(gameType) {
@@ -5583,28 +5615,31 @@ function initLivestreamPlayer(url) {
 }
 
 function autoDetectPlatform(url) {
-  const lower = url.toLowerCase()
+  const normalized = normalizeLivestreamInput(url)
+  const lower = normalized.toLowerCase()
+  if (/^\d{6,}$/.test(normalized.trim())) return 'migu'
   if (lower.includes('douyin.com') || lower.includes('douyinvod.com')) return 'douyin'
   if (lower.includes('bilibili.com') || lower.includes('bilivideo.com')) return 'bilibili'
+  if (lower.includes('miguvideo.com') || lower.includes('cmvideo.cn') || lower.includes('migu.cn')) return 'migu'
   if (lower.includes('.m3u8')) return 'hls'
   if (lower.includes('.flv')) return 'flv'
   return null
 }
 
 function confirmLivestreamShare() {
-  const url = livestreamUrlInput.value.trim()
+  const url = normalizeLivestreamInput(livestreamUrlInput.value)
   if (!isValidLivestreamUrl.value) {
     alert('请输入有效的直播地址')
     return
   }
 
   const detectedPlatform = livestreamPlatform.value === 'auto' ? autoDetectPlatform(url) : livestreamPlatform.value
-  const platformLabels = { douyin: '抖音', bilibili: '哔哩哔哩', hls: 'HLS', flv: 'FLV', auto: '自动识别' }
+  const platformLabels = { douyin: '抖音', bilibili: '哔哩哔哩', migu: '咪咕视频', hls: 'HLS', flv: 'FLV', auto: '自动识别' }
   const platformLabel = platformLabels[detectedPlatform] || '直播'
   const fileName = '直播 · ' + platformLabel
 
-  // 抖音和B站需要后端解析
-  if (['douyin', 'bilibili'].includes(detectedPlatform)) {
+  // 平台直播间地址需要后端解析
+  if (['douyin', 'bilibili', 'migu'].includes(detectedPlatform)) {
     livestreamResolving.value = true
     resolveAndStartLivestream(url, detectedPlatform).finally(() => {
       livestreamResolving.value = false
@@ -5628,7 +5663,7 @@ async function resolveAndStartLivestream(roomUrl, platform) {
       alert(data.error || '解析直播地址失败，请检查直播间是否在线')
       return
     }
-    const platformLabels = { douyin: '抖音', bilibili: '哔哩哔哩' }
+    const platformLabels = { douyin: '抖音', bilibili: '哔哩哔哩', migu: '咪咕视频' }
     const label = platformLabels[platform] || '直播'
     const fileName = '直播 · ' + label
     // 使用服务器返回的协议类型（优先hls）
@@ -5923,10 +5958,7 @@ function closeGameStage() {
   }
 
   if (!activeGame.value && !gameInvite.value) {
-    closeInvitePicker()
-    selectedGomokuInviteeId.value = ''
-    selectedLandlordInviteeIds.value = []
-    selectedGameType.value = ''
+    resetGameMenuSelection()
     showGameMenu.value = false
     return
   }

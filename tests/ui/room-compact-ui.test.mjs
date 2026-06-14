@@ -133,7 +133,8 @@ test('聊天输入区和成员区进一步紧凑化', () => {
 
 test('共享区权限与视频控制按管理员全局/成员本地分层', () => {
   assert.match(roomVue, /const canOpenGameMenu = computed\(\(\) => isConnected\.value && isAdmin\.value\)/)
-  assert.match(roomVue, /<button v-if="canOpenGameMenu" class="secondary-btn" :class="\{ active: showGameMenu \|\| activeGame \|\| gameInvite \}" @click="toggleGameMenu">/)
+  assert.match(roomVue, /<button v-if="canOpenGameMenu" class="toolbar-btn game-menu-btn" :class="\{ active: showGameMenu \|\| activeGame \|\| gameInvite \}" @click="toggleGameMenu">/)
+  assert.match(roomVue, /function toggleGameMenu\(\) \{[\s\S]*showGameMenu\.value = false[\s\S]*openGameMenu\(\)/)
   assert.match(roomVue, /canShare \? '选择文件或开始屏幕共享后，房间成员会同步查看内容与操作状态。' : '等待管理员共享图片、视频或屏幕，内容会自动同步到这里。'/)
   assert.match(roomVue, /const canGlobalControlShare = computed\(\(\) => isConnected\.value && isAdmin\.value\)/)
   assert.match(roomVue, /const canLocalControlSharedVideo = computed\(\(\) => Boolean\(activeShare\.value && activeShare\.value\.kind === 'video' && isConnected\.value\)\)/)

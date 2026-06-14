@@ -69,8 +69,8 @@ print_warning "构建前端资源..."
 
 print_warning "启动 ShareRoom 生产服务..."
 (
-  cd "$PROJECT_ROOT" && \
-  nohup npm run start > "$LOG_FILE" 2>&1 &
+  cd "$PROJECT_ROOT" || exit 1
+  nohup node server/server.js > "$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
 )
 

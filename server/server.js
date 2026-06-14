@@ -2,9 +2,11 @@ const express = require('express')
 const fs = require('fs')
 const http = require('http')
 const path = require('path')
+const { Readable } = require('stream')
 const { Server } = require('socket.io')
 const { getLiveKitConfig } = require('./livekit/config')
 const { createRealtimeShareToken } = require('./livekit/token')
+const { resolveMiguLive, detectMiguProtocol } = require('./miguResolver')
 
 const app = express()
 app.use(express.json({ limit: '1mb' }))
@@ -15,6 +17,23 @@ const io = new Server(server, {
     methods: ['GET', 'POST']
   }
 })
+
+function rewriteHlsResourceUrl(rawUrl, baseUrl) {
+  const absolute = new URL(rawUrl, baseUrl).href
+  const proxyPath = absolute.toLowerCase().includes('.m3u8') ? '/api/hls-proxy' : '/api/segment-proxy'
+  return `${proxyPath}?url=${encodeURIComponent(absolute)}`
+}
+
+function rewriteHlsTagUris(line, baseUrl) {
+  return line.replace(/\bURI=(["'])(.*?)\1/g, (match, quote, uri) => {
+    if (!uri || uri.startsWith('data:') || uri.startsWith('blob:')) return match
+    try {
+      return `URI=${quote}${rewriteHlsResourceUrl(uri, baseUrl)}${quote}`
+    } catch {
+      return match
+    }
+  })
+}
 
 const rooms = new Map()
 const socketSessions = new Map()
@@ -1009,21 +1028,21 @@ app.get('/api/hls-proxy', async (req, res) => {
     const contentType = resp.headers.get('content-type') || ''
     const text = await resp.text()
 
-    // Rewrite relative segment URLs in m3u8 to go through our proxy
-    const baseUrl = new URL(targetUrl)
-    const rewritten = text.replace(/(^[^#][^\s]*$)/gm, (match) => {
-      const line = match.trim()
-      if (!line || line.startsWith('#')) return match
+    // Rewrite relative segment URLs in m3u8 to go through our proxy.
+    // 不使用 /^...$/gm 正则逐行替换：JS 的 ^/$ 会在 CRLF 的 \r 和 \n
+    // 中间也命中，容易把上一行的 \n 吃掉，生成 "\r/api/..." 这种 HLS.js
+    // 无法正确解析的播放列表。
+    const baseUrl = new URL(resp.url || targetUrl)
+    const rewritten = text.split(/\r?\n|\r/g).map((line) => {
+      const trimmed = line.trim()
+      if (!trimmed) return line
+      if (trimmed.startsWith('#')) return rewriteHlsTagUris(line, baseUrl)
       try {
-        const absolute = new URL(line, baseUrl).href
-        if (line.includes('.m3u8')) {
-          return '/api/hls-proxy?url=' + encodeURIComponent(absolute)
-        }
-        return '/api/segment-proxy?url=' + encodeURIComponent(absolute)
+        return rewriteHlsResourceUrl(trimmed, baseUrl)
       } catch {
-        return match
+        return line
       }
-    })
+    }).join('\n')
 
     res.set('Content-Type', contentType.includes('mpegurl') ? 'application/vnd.apple.mpegurl' : 'application/octet-stream')
     res.set('Access-Control-Allow-Origin', '*')
@@ -1040,30 +1059,66 @@ app.get('/api/flv-proxy', async (req, res) => {
   if (!targetUrl) {
     return res.status(400).send('missing url param')
   }
+  const controller = new AbortController()
+  req.on('close', () => controller.abort())
   try {
     const resp = await fetch(targetUrl, {
+      signal: controller.signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Referer': new URL(targetUrl).origin + '/',
-        'Range': req.headers.range || ''
+        ...(req.headers.range ? { Range: req.headers.range } : {})
       }
     })
     if (!resp.ok) {
       return res.status(resp.status).send('upstream error: ' + resp.status)
     }
-    res.set('Content-Type', 'video/x-flv')
+    if (resp.status === 206) res.status(206)
+    res.set('Content-Type', resp.headers.get('content-type') || 'video/x-flv')
     res.set('Access-Control-Allow-Origin', '*')
+    res.set('Access-Control-Allow-Headers', 'Range')
     res.set('Cache-Control', 'no-cache')
-    res.set('Transfer-Encoding', 'chunked')
+
+    const contentRange = resp.headers.get('content-range')
+    const acceptRanges = resp.headers.get('accept-ranges')
+    const contentLength = resp.headers.get('content-length')
+    if (contentRange) res.set('Content-Range', contentRange)
+    if (acceptRanges) res.set('Accept-Ranges', acceptRanges)
+    if (contentLength) res.set('Content-Length', contentLength)
+
     if (resp.body && resp.body.pipe) {
-      resp.body.pipe(res)
+      resp.body.on('error', (error) => {
+        console.error('FLV upstream stream error:', error.message)
+        if (!res.destroyed) res.destroy(error)
+      })
+      req.on('close', () => resp.body.destroy?.())
+      return resp.body.pipe(res)
+    }
+
+    if (resp.body) {
+      const nodeStream = Readable.fromWeb(resp.body)
+      nodeStream.on('error', (error) => {
+        if (error.name === 'AbortError') return
+        console.error('FLV upstream stream error:', error.message)
+        if (!res.destroyed) res.destroy(error)
+      })
+      req.on('close', () => nodeStream.destroy())
+      return nodeStream.pipe(res)
+    }
+
+    if (!res.headersSent) {
+      res.status(502).send('upstream body missing')
     } else {
-      const buffer = Buffer.from(await resp.arrayBuffer())
-      res.send(buffer)
+      res.end()
     }
   } catch (err) {
+    if (err.name === 'AbortError') return
     console.error('FLV proxy error:', err.message)
-    res.status(502).send('proxy fetch failed')
+    if (!res.headersSent) {
+      res.status(502).send('proxy fetch failed')
+    } else {
+      res.destroy(err)
+    }
   }
 })
 
@@ -1076,15 +1131,26 @@ app.get('/api/segment-proxy', async (req, res) => {
     const resp = await fetch(targetUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': new URL(targetUrl).origin + '/'
+        'Referer': new URL(targetUrl).origin + '/',
+        ...(req.headers.range ? { Range: req.headers.range } : {})
       }
     })
     if (!resp.ok) {
       return res.status(resp.status).send('upstream error')
     }
-    const contentType = resp.headers.get('content-type') || 'video/mp2t'
+    const urlPath = new URL(targetUrl).pathname.toLowerCase()
+    const fallbackType = urlPath.endsWith('.ts') ? 'video/mp2t' : 'application/octet-stream'
+    const contentType = resp.headers.get('content-type') || fallbackType
+    if (resp.status === 206) res.status(206)
     res.set('Content-Type', contentType)
     res.set('Access-Control-Allow-Origin', '*')
+    res.set('Access-Control-Allow-Headers', 'Range')
+    const contentRange = resp.headers.get('content-range')
+    const acceptRanges = resp.headers.get('accept-ranges')
+    const contentLength = resp.headers.get('content-length')
+    if (contentRange) res.set('Content-Range', contentRange)
+    if (acceptRanges) res.set('Accept-Ranges', acceptRanges)
+    if (contentLength) res.set('Content-Length', contentLength)
     res.set('Cache-Control', 'public, max-age=10')
     const buffer = Buffer.from(await resp.arrayBuffer())
     res.send(buffer)
@@ -1112,6 +1178,21 @@ app.post('/api/realtime-share/token', async (req, res) => {
   res.json(payload)
 })
 
+const isMiguLivestreamUrl = (value = '') => {
+  const lower = String(value || '').toLowerCase()
+  return /^\d{6,}$/.test(String(value || '').trim())
+    || lower.includes('miguvideo.com')
+    || lower.includes('cmvideo.cn')
+    || lower.includes('miguvideo.cn')
+    || lower.includes('migu.cn')
+}
+
+const createLivestreamProxyUrl = (streamUrl, protocol) => {
+  if (!streamUrl) return null
+  const proxyPath = protocol === 'flv' ? '/api/flv-proxy' : '/api/hls-proxy'
+  return `${proxyPath}?url=${encodeURIComponent(streamUrl)}`
+}
+
 app.post('/api/resolve-livestream', async (req, res) => {
   const { platform, url } = req.body || {}
   if (!url || !platform) {
@@ -1121,7 +1202,15 @@ app.post('/api/resolve-livestream', async (req, res) => {
   try {
     let streamUrls = { hls: null, flv: null }
     const effectivePlatform = platform === 'auto'
-      ? (url.includes('douyin.com') ? 'douyin' : url.includes('bilibili.com') ? 'bilibili' : null)
+      ? (
+          url.includes('douyin.com')
+            ? 'douyin'
+            : url.includes('bilibili.com')
+              ? 'bilibili'
+              : isMiguLivestreamUrl(url)
+                ? 'migu'
+                : null
+        )
       : platform
     if (!effectivePlatform) {
       return res.status(400).json({ ok: false, error: '无法自动识别直播平台，请手动选择' })
@@ -1317,17 +1406,52 @@ app.post('/api/resolve-livestream', async (req, res) => {
       if (!streamUrls.hls && !streamUrls.flv) {
         return res.status(502).json({ ok: false, error: 'B站直播解析失败，请确认直播间是否在直播中' })
       }
+    } else if (effectivePlatform === 'migu') {
+      try {
+        const miguResult = await resolveMiguLive(url, {
+          rateType: Number(process.env.MIGU_RATE_TYPE || 3),
+          userId: process.env.MIGU_USER_ID || '',
+          token: process.env.MIGU_TOKEN || '',
+          preferProtocol: 'flv'
+        })
+        const protocol = miguResult.protocol || detectMiguProtocol(miguResult.url)
+        if (protocol === 'flv') {
+          streamUrls.flv = miguResult.url
+        } else {
+          streamUrls.hls = miguResult.url
+        }
+        console.log(
+          '咪咕解析结果:',
+          miguResult.name || miguResult.pid || 'unknown',
+          'protocol=',
+          protocol || 'unknown'
+        )
+      } catch (e) {
+        console.error('咪咕解析失败:', e.message)
+      }
+
+      if (!streamUrls.hls && !streamUrls.flv) {
+        return res.status(502).json({ ok: false, error: '咪咕直播解析失败，请确认直播间是否在直播中，或该内容是否需要会员权益' })
+      }
     } else {
       return res.status(400).json({ ok: false, error: '不支持的平台: ' + effectivePlatform })
     }
 
-    // 将 http:// 转为 https://（HTTPS 页面不能加载 HTTP 混合内容）
-    if (streamUrls.hls) streamUrls.hls = streamUrls.hls.replace(/^http:\/\//, 'https://')
-    if (streamUrls.flv) streamUrls.flv = streamUrls.flv.replace(/^http:\/\//, 'https://')
+    if (effectivePlatform === 'migu') {
+      // 咪咕常返回 http + 302 的临时地址；走本服务代理可避免 HTTPS 页面混合内容和跨域问题。
+      if (streamUrls.hls) streamUrls.hls = createLivestreamProxyUrl(streamUrls.hls, 'hls')
+      if (streamUrls.flv) streamUrls.flv = createLivestreamProxyUrl(streamUrls.flv, 'flv')
+    } else {
+      // 将 http:// 转为 https://（HTTPS 页面不能加载 HTTP 混合内容）
+      if (streamUrls.hls) streamUrls.hls = streamUrls.hls.replace(/^http:\/\//, 'https://')
+      if (streamUrls.flv) streamUrls.flv = streamUrls.flv.replace(/^http:\/\//, 'https://')
+    }
 
-    // 优先 HLS，其次 FLV
-    const streamUrl = streamUrls.hls || streamUrls.flv
-    const protocol = streamUrls.hls ? 'hls' : 'flv'
+    // 常规平台优先 HLS；咪咕如果拿到 FLV 则优先 FLV，否则回退 HLS。
+    const streamUrl = effectivePlatform === 'migu'
+      ? (streamUrls.flv || streamUrls.hls)
+      : (streamUrls.hls || streamUrls.flv)
+    const protocol = streamUrl === streamUrls.flv ? 'flv' : 'hls'
     res.json({ ok: true, streamUrl, protocol, hls: streamUrls.hls, flv: streamUrls.flv })
   } catch (err) {
     console.error('解析直播地址失败:', err)
